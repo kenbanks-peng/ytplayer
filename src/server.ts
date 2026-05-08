@@ -81,10 +81,6 @@ export async function runServer(): Promise<void> {
 	let paused = false;
 	let repeat = false;
 	let mode: PlayMode = "audio";
-	// Set to true when WE are the reason mpv is going down (stop, clear, mode
-	// change, shutdown). Differentiates from natural end-of-playlist, which
-	// should drop the queue.
-	let userExit = false;
 
 	const persist = () => saveStateFile({ queue, index, repeat, mode });
 
@@ -233,12 +229,6 @@ export async function runServer(): Promise<void> {
 				mpvReady = false;
 				index = -1;
 				paused = false;
-				if (!userExit) {
-					// Natural end of playlist (or mpv crash). Drop the queue so the
-					// next add starts a fresh playlist.
-					queue = [];
-				}
-				userExit = false;
 				persist();
 			}
 		});
@@ -246,7 +236,6 @@ export async function runServer(): Promise<void> {
 	};
 
 	const killMpv = async () => {
-		userExit = true;
 		if (mpvSock) {
 			try {
 				mpvSock.destroy();
@@ -361,7 +350,6 @@ export async function runServer(): Promise<void> {
 				index = -1;
 				persist();
 				if (mpvReady) {
-					userExit = true;
 					await mpvCmd(["quit"]);
 				}
 				return { ok: true };
@@ -412,7 +400,6 @@ export async function runServer(): Promise<void> {
 			}
 			case "stop":
 				if (mpvReady) {
-					userExit = true;
 					await mpvCmd(["quit"]);
 				}
 				index = -1;
