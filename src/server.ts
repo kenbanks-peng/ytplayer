@@ -81,6 +81,10 @@ export async function runServer(): Promise<void> {
 	let paused = false;
 	let repeat = false;
 	let mode: PlayMode = "audio";
+	// Set to true when WE are the reason mpv is going down (stop, clear, mode
+	// change, shutdown). Differentiates from natural end-of-playlist, which
+	// should drop the queue.
+	let userExit = false;
 
 	const persist = () => saveStateFile({ queue, index, repeat, mode });
 
@@ -229,6 +233,12 @@ export async function runServer(): Promise<void> {
 				mpvReady = false;
 				index = -1;
 				paused = false;
+				if (!userExit) {
+					// Natural end of playlist (or mpv crash). Drop the queue so the
+					// next add starts a fresh playlist.
+					queue = [];
+				}
+				userExit = false;
 				persist();
 			}
 		});
@@ -236,6 +246,7 @@ export async function runServer(): Promise<void> {
 	};
 
 	const killMpv = async () => {
+		userExit = true;
 		if (mpvSock) {
 			try {
 				mpvSock.destroy();
@@ -261,12 +272,17 @@ export async function runServer(): Promise<void> {
 	};
 
 	const loadQueueIntoMpv = async (jumpTo: number) => {
-		await mpvCmd(["playlist-clear"]);
-		await mpvCmd(["stop", "keep-playlist"]);
-		for (const t of queue) {
-			await mpvCmd(["loadfile", t.url, "append"]);
+		const first = queue[0];
+		if (!first) return;
+		// `replace` clears any existing playlist AND starts playback of the new
+		// file. This avoids the fragile "stop + set playlist-pos" sequence that
+		// can leave mpv stuck on the idle screen after spawning fresh.
+		await mpvCmd(["loadfile", first.url, "replace"]);
+		for (let i = 1; i < queue.length; i++) {
+			const t = queue[i];
+			if (t) await mpvCmd(["loadfile", t.url, "append"]);
 		}
-		if (jumpTo >= 0 && jumpTo < queue.length) {
+		if (jumpTo > 0 && jumpTo < queue.length) {
 			await mpvCmd(["set_property", "playlist-pos", jumpTo]);
 		}
 	};
@@ -345,8 +361,8 @@ export async function runServer(): Promise<void> {
 				index = -1;
 				persist();
 				if (mpvReady) {
-					await mpvCmd(["playlist-clear"]);
-					await mpvCmd(["stop", "keep-playlist"]);
+					userExit = true;
+					await mpvCmd(["quit"]);
 				}
 				return { ok: true };
 			}
@@ -396,7 +412,8 @@ export async function runServer(): Promise<void> {
 			}
 			case "stop":
 				if (mpvReady) {
-					await mpvCmd(["set_property", "playlist-pos", -1]);
+					userExit = true;
+					await mpvCmd(["quit"]);
 				}
 				index = -1;
 				paused = false;
