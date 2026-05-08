@@ -207,6 +207,9 @@ function App() {
 					setPaused(Boolean(resp.data));
 				} else {
 					saveState(null);
+					try {
+						unlinkSync(MPV_SOCK);
+					} catch {}
 				}
 			})();
 		} else if (cached) {
@@ -216,6 +219,7 @@ function App() {
 		if (cachedSearch && cachedSearch.results.length > 0) {
 			setResults(cachedSearch.results);
 			lastQueryRef.current = cachedSearch.query;
+			setFocus("results");
 			if (cached) {
 				const i = cachedSearch.results.findIndex((r) => r.id === cached.id);
 				if (i >= 0) setSelectedIndex(i);
@@ -343,6 +347,16 @@ function App() {
 			loadMore();
 			return;
 		}
+		if (key.name === "c" && focus !== "search") {
+			setResults([]);
+			setSelectedIndex(0);
+			setError(null);
+			setStatus("");
+			lastQueryRef.current = "";
+			saveSearch(null);
+			setFocus("search");
+			return;
+		}
 	});
 
 	// Layout: <pg> <title>  <uploader>  <views>  <duration>
@@ -457,7 +471,7 @@ function App() {
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
 					Tab: switch focus • Enter: play • Space: pause • s: stop • m: toggle
-					mode • n: load more • q/ctrl-c: quit
+					mode • n: load more • c: clear • q/ctrl-c: quit
 				</text>
 			</box>
 		</box>

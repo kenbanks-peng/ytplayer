@@ -35,4 +35,5 @@ bun run build
 - `s` — stop
 - `m` — toggle audio/video mode
 - `n` — load more results
+- `c` — clear results and cache
 - `q` — quit
