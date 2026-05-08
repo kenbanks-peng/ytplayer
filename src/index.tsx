@@ -1,5 +1,13 @@
-import { existsSync, unlinkSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { connect } from "node:net";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createCliRenderer } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { type Subprocess, spawn } from "bun";
@@ -34,11 +42,25 @@ function fmtCount(n?: number): string {
 type MpvCommandValue = string | number | boolean;
 
 const MPV_SOCK = "/tmp/ytmusic-mpv.sock";
+const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
+const STATE_FILE = join(CACHE_DIR, "state.json");
 
-let mpvPid: number | null = null;
-const setMpvPid = (pid: number | null) => {
-	mpvPid = pid;
-};
+function saveState(track: Track | null) {
+	try {
+		mkdirSync(CACHE_DIR, { recursive: true });
+		if (track) writeFileSync(STATE_FILE, JSON.stringify(track));
+		else if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
+	} catch {}
+}
+
+function loadState(): Track | null {
+	try {
+		if (!existsSync(STATE_FILE)) return null;
+		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Track;
+	} catch {
+		return null;
+	}
+}
 
 function fmtDur(s?: number) {
 	if (!s || !Number.isFinite(s)) return "--:--";
@@ -135,30 +157,35 @@ function App() {
 				mpvRef.current.kill();
 			} catch {}
 			mpvRef.current = null;
-			setMpvPid(null);
 		}
 		if (existsSync(MPV_SOCK)) {
 			try {
 				unlinkSync(MPV_SOCK);
 			} catch {}
 		}
+		saveState(null);
 	};
 
 	useEffect(() => {
+		const cached = loadState();
+		if (cached && existsSync(MPV_SOCK)) {
+			(async () => {
+				const resp = (await sendMpv(["get_property", "pause"])) as {
+					error?: string;
+					data?: boolean;
+				} | null;
+				if (resp && resp.error === "success") {
+					setNow(cached);
+					setPaused(Boolean(resp.data));
+				} else {
+					saveState(null);
+				}
+			})();
+		} else if (cached) {
+			saveState(null);
+		}
 		return () => {
 			abortRef.current?.abort();
-			if (mpvRef.current) {
-				try {
-					mpvRef.current.kill();
-				} catch {}
-				mpvRef.current = null;
-				setMpvPid(null);
-			}
-			if (existsSync(MPV_SOCK)) {
-				try {
-					unlinkSync(MPV_SOCK);
-				} catch {}
-			}
 		};
 	}, []);
 
@@ -218,6 +245,7 @@ function App() {
 		stopMpv();
 		setNow(t);
 		setPaused(false);
+		saveState(t);
 		const args = [
 			"mpv",
 			"--no-terminal",
@@ -230,12 +258,11 @@ function App() {
 		];
 		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
 		mpvRef.current = proc;
-		setMpvPid(proc.pid);
 		proc.exited.then(() => {
 			if (mpvRef.current === proc) {
 				mpvRef.current = null;
-				setMpvPid(null);
 				setNow((cur) => (cur?.id === t.id ? null : cur));
+				saveState(null);
 			}
 		});
 	};
@@ -249,7 +276,7 @@ function App() {
 			(key.ctrl && key.name === "c") ||
 			(key.name === "q" && focus !== "search")
 		) {
-			stopMpv();
+			mpvRef.current = null;
 			process.nextTick(() => shutdown(0));
 			return;
 		}
@@ -394,22 +421,7 @@ function App() {
 const renderer = await createCliRenderer();
 createRoot(renderer).render(<App />);
 
-const killMpv = () => {
-	if (mpvPid) {
-		try {
-			process.kill(mpvPid, "SIGKILL");
-		} catch {}
-		mpvPid = null;
-	}
-	if (existsSync(MPV_SOCK)) {
-		try {
-			unlinkSync(MPV_SOCK);
-		} catch {}
-	}
-};
-
 const shutdown = (code = 0) => {
-	killMpv();
 	try {
 		renderer.destroy();
 	} catch {}
@@ -419,4 +431,3 @@ const shutdown = (code = 0) => {
 process.on("SIGINT", () => shutdown(130));
 process.on("SIGTERM", () => shutdown(143));
 process.on("SIGHUP", () => shutdown(129));
-process.on("exit", killMpv);
