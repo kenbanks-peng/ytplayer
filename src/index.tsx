@@ -86,12 +86,66 @@ function fmtDur(s?: number) {
 	return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function charWidth(cp: number): number {
+	if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return 0;
+	// Combining marks, zero-width joiners, variation selectors.
+	if (
+		(cp >= 0x0300 && cp <= 0x036f) ||
+		(cp >= 0x200b && cp <= 0x200f) ||
+		cp === 0x200d ||
+		(cp >= 0xfe00 && cp <= 0xfe0f) ||
+		(cp >= 0xe0100 && cp <= 0xe01ef)
+	) {
+		return 0;
+	}
+	// Wide ranges: CJK, hangul, kana, fullwidth, most emoji.
+	if (
+		(cp >= 0x1100 && cp <= 0x115f) ||
+		(cp >= 0x2e80 && cp <= 0x303e) ||
+		(cp >= 0x3041 && cp <= 0x33ff) ||
+		(cp >= 0x3400 && cp <= 0x4dbf) ||
+		(cp >= 0x4e00 && cp <= 0x9fff) ||
+		(cp >= 0xa000 && cp <= 0xa4cf) ||
+		(cp >= 0xac00 && cp <= 0xd7a3) ||
+		(cp >= 0xf900 && cp <= 0xfaff) ||
+		(cp >= 0xfe30 && cp <= 0xfe4f) ||
+		(cp >= 0xff00 && cp <= 0xff60) ||
+		(cp >= 0xffe0 && cp <= 0xffe6) ||
+		(cp >= 0x1f300 && cp <= 0x1faff) ||
+		(cp >= 0x20000 && cp <= 0x2fffd) ||
+		(cp >= 0x30000 && cp <= 0x3fffd)
+	) {
+		return 2;
+	}
+	return 1;
+}
+
+function displayWidth(s: string): number {
+	let w = 0;
+	for (const ch of s) w += charWidth(ch.codePointAt(0) ?? 0);
+	return w;
+}
+
 function fitCol(s: string, width: number): string {
 	if (width <= 0) return "";
-	if (s.length === width) return s;
-	if (s.length < width) return s.padEnd(width, " ");
-	if (width <= 1) return s.slice(0, width);
-	return `${s.slice(0, width - 1)}…`;
+	const w = displayWidth(s);
+	if (w === width) return s;
+	if (w < width) return s + " ".repeat(width - w);
+	const reserve = width <= 1 ? 0 : 1;
+	let acc = "";
+	let aw = 0;
+	for (const ch of s) {
+		const cw = charWidth(ch.codePointAt(0) ?? 0);
+		if (aw + cw > width - reserve) break;
+		acc += ch;
+		aw += cw;
+	}
+	if (reserve) {
+		acc += "…";
+		aw += 1;
+	}
+	if (aw < width) acc += " ".repeat(width - aw);
+	return acc;
 }
 
 const PAGE_SIZE = 20;
@@ -460,8 +514,8 @@ function App() {
 	const nowId = now?.id ?? null;
 	const options = results.map((t) => {
 		const marker = t.id === nowId ? "▶" : pageMarker(t.page);
-		const title = fitCol(t.title, titleW);
-		const uploader = fitCol(t.uploader ?? "", uploaderW);
+		const title = fitCol(t.title.normalize("NFKC"), titleW);
+		const uploader = fitCol((t.uploader ?? "").normalize("NFKC"), uploaderW);
 		const views = fmtCount(t.views).padStart(viewsW, " ");
 		const duration = fmtDur(t.duration).padStart(durW, " ");
 		return {
@@ -475,7 +529,7 @@ function App() {
 	const plTitleW = Math.max(10, playlistW - plDurW - 6);
 	const playlistOptions = queue.map((t, i) => {
 		const marker = i === queueIndex ? "▶" : " ";
-		const title = fitCol(t.title, plTitleW);
+		const title = fitCol(t.title.normalize("NFKC"), plTitleW);
 		const duration = fmtDur(t.duration).padStart(plDurW, " ");
 		return {
 			name: `${marker} ${title}  ${duration}`,
@@ -591,8 +645,10 @@ function App() {
 							<span fg={paused ? "yellow" : "green"}>
 								{paused ? "❚❚" : "▶ "}
 							</span>{" "}
-							{now.title}
-							{now.uploader ? <span fg="gray"> — {now.uploader}</span> : null}
+							{now.title.normalize("NFKC")}
+							{now.uploader ? (
+								<span fg="gray"> — {now.uploader.normalize("NFKC")}</span>
+							) : null}
 							<span fg="gray">
 								{" "}
 								[{queueIndex + 1}/{queue.length}]
