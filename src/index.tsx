@@ -250,7 +250,7 @@ function App() {
 			(key.name === "q" && focus !== "search")
 		) {
 			stopMpv();
-			process.nextTick(() => process.exit(0));
+			process.nextTick(() => shutdown(0));
 			return;
 		}
 		if (key.name === "space" && focus !== "search") {
@@ -384,7 +384,7 @@ function App() {
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
 					Tab: switch focus • Enter: play • Space: pause • s: stop • m: toggle
-					mode • n: load more • q: quit
+					mode • n: load more • q/ctrl-c: quit
 				</text>
 			</box>
 		</box>
