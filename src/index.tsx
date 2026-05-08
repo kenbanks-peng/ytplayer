@@ -44,6 +44,7 @@ type MpvCommandValue = string | number | boolean;
 const MPV_SOCK = "/tmp/ytmusic-mpv.sock";
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const STATE_FILE = join(CACHE_DIR, "state.json");
+const SEARCH_FILE = join(CACHE_DIR, "search.json");
 
 function saveState(track: Track | null) {
 	try {
@@ -57,6 +58,28 @@ function loadState(): Track | null {
 	try {
 		if (!existsSync(STATE_FILE)) return null;
 		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Track;
+	} catch {
+		return null;
+	}
+}
+
+type SearchCache = { query: string; results: Track[] };
+
+function saveSearch(cache: SearchCache | null) {
+	try {
+		mkdirSync(CACHE_DIR, { recursive: true });
+		if (cache && cache.results.length > 0) {
+			writeFileSync(SEARCH_FILE, JSON.stringify(cache));
+		} else if (existsSync(SEARCH_FILE)) {
+			unlinkSync(SEARCH_FILE);
+		}
+	} catch {}
+}
+
+function loadSearch(): SearchCache | null {
+	try {
+		if (!existsSync(SEARCH_FILE)) return null;
+		return JSON.parse(readFileSync(SEARCH_FILE, "utf8")) as SearchCache;
 	} catch {
 		return null;
 	}
@@ -147,16 +170,19 @@ function App() {
 	const [paused, setPaused] = useState(false);
 	const [mode, setMode] = useState<"audio" | "video">("audio");
 	const [status, setStatus] = useState("");
+	const [selectedIndex, setSelectedIndex] = useState(0);
 	const mpvRef = useRef<Subprocess | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
 
-	const stopMpv = () => {
+	const stopMpv = async () => {
 		if (mpvRef.current) {
 			try {
 				mpvRef.current.kill();
 			} catch {}
 			mpvRef.current = null;
+		} else if (existsSync(MPV_SOCK)) {
+			await sendMpv(["quit"]);
 		}
 		if (existsSync(MPV_SOCK)) {
 			try {
@@ -165,6 +191,8 @@ function App() {
 		}
 		saveState(null);
 	};
+
+	const lastQueryRef = useRef("");
 
 	useEffect(() => {
 		const cached = loadState();
@@ -184,12 +212,19 @@ function App() {
 		} else if (cached) {
 			saveState(null);
 		}
+		const cachedSearch = loadSearch();
+		if (cachedSearch && cachedSearch.results.length > 0) {
+			setResults(cachedSearch.results);
+			lastQueryRef.current = cachedSearch.query;
+			if (cached) {
+				const i = cachedSearch.results.findIndex((r) => r.id === cached.id);
+				if (i >= 0) setSelectedIndex(i);
+			}
+		}
 		return () => {
 			abortRef.current?.abort();
 		};
 	}, []);
-
-	const lastQueryRef = useRef("");
 
 	const doSearch = async (q: string = query) => {
 		if (!q.trim() || searching) return;
@@ -202,7 +237,9 @@ function App() {
 		try {
 			const tracks = await searchYouTube(q, PAGE_SIZE, 1, ac.signal);
 			lastQueryRef.current = q;
-			setResults(sortByViewsDesc(tracks));
+			const sorted = sortByViewsDesc(tracks);
+			setResults(sorted);
+			saveSearch({ query: q, results: sorted });
 			setStatus("");
 			if (tracks.length > 0) setFocus("results");
 		} catch (e) {
@@ -231,7 +268,11 @@ function App() {
 				setStatus(`No more results for "${q}"`);
 				return;
 			}
-			setResults((cur) => sortByViewsDesc([...cur, ...fresh]));
+			setResults((cur) => {
+				const merged = sortByViewsDesc([...cur, ...fresh]);
+				saveSearch({ query: q, results: merged });
+				return merged;
+			});
 			setStatus("");
 		} catch (e) {
 			const err = e as { name?: string; message?: string };
@@ -241,10 +282,13 @@ function App() {
 		}
 	};
 
-	const playTrack = (t: Track, playMode: "audio" | "video" = mode) => {
-		stopMpv();
+	const playTrack = async (t: Track, playMode: "audio" | "video" = mode) => {
+		await stopMpv();
 		setNow(t);
 		setPaused(false);
+		setStatus("");
+		const i = results.findIndex((r) => r.id === t.id);
+		if (i >= 0) setSelectedIndex(i);
 		saveState(t);
 		const args = [
 			"mpv",
@@ -361,7 +405,9 @@ function App() {
 							options={options}
 							focused={focus === "results"}
 							showDescription={false}
-							onSelect={(i) => {
+							selectedIndex={selectedIndex}
+							onChange={(i: number) => setSelectedIndex(i)}
+							onSelect={(i: number) => {
 								const track = results[i];
 								if (track) playTrack(track);
 							}}
