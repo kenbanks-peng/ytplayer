@@ -61,6 +61,7 @@ type Request =
 	| { cmd: "ping" }
 	| { cmd: "state" }
 	| { cmd: "queue:add"; track: Track; mode?: PlayMode }
+	| { cmd: "queue:play"; track: Track }
 	| { cmd: "queue:remove"; id: string }
 	| { cmd: "queue:jump"; index: number }
 	| { cmd: "queue:move"; from: number; to: number }
@@ -305,25 +306,34 @@ export async function runServer(): Promise<void> {
 				if (!req.track) return { ok: false, error: "missing track" };
 				if (req.mode && req.mode !== mode) {
 					mode = req.mode;
-					if (mpvReady) {
-						const wasIndex = index;
-						await killMpv();
-						await spawnMpv();
-						queue.push(req.track);
-						persist();
-						await loadQueueIntoMpv(wasIndex >= 0 ? wasIndex : queue.length - 1);
-						return { ok: true };
-					}
 				}
 				queue.push(req.track);
 				persist();
+				if (mpvReady) {
+					await mpvCmd(["loadfile", req.track.url, "append"]);
+				}
+				return { ok: true };
+			}
+			case "queue:play": {
+				if (!req.track) return { ok: false, error: "missing track" };
+				let i = queue.findIndex((t) => t.id === req.track.id);
+				if (i < 0) {
+					queue.push(req.track);
+					i = queue.length - 1;
+					if (mpvReady) {
+						await mpvCmd(["loadfile", req.track.url, "append"]);
+					}
+				}
 				if (!mpvReady) {
 					const ok = await spawnMpv();
 					if (!ok) return { ok: false, error: "mpv failed to start" };
-					await loadQueueIntoMpv(queue.length - 1);
+					await loadQueueIntoMpv(i);
 				} else {
-					await mpvCmd(["loadfile", req.track.url, "append-play"]);
+					await mpvCmd(["set_property", "playlist-pos", i]);
 				}
+				index = i;
+				paused = false;
+				persist();
 				return { ok: true };
 			}
 			case "queue:remove": {

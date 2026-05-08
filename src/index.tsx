@@ -20,6 +20,7 @@ import {
 	queueClear,
 	queueJump,
 	queueMove,
+	queuePlay,
 	queueRemove,
 	queueShuffle,
 	setMode as setModeOnServer,
@@ -272,10 +273,23 @@ function App() {
 
 	const addToQueue = async (t: Track) => {
 		setStatus("");
-		const wasEmpty = queue.length === 0;
-		setQueue((cur) => [...cur, t]);
-		if (wasEmpty) setQueueIndex(0);
+		setQueue((cur) => (cur.some((q) => q.id === t.id) ? cur : [...cur, t]));
 		await queueAdd(t, mode);
+	};
+
+	const playFromResults = async (t: Track) => {
+		setStatus("");
+		setQueue((cur) => {
+			const i = cur.findIndex((q) => q.id === t.id);
+			if (i >= 0) {
+				setQueueIndex(i);
+				return cur;
+			}
+			setQueueIndex(cur.length);
+			return [...cur, t];
+		});
+		setPaused(false);
+		await queuePlay(t);
 	};
 
 	const jumpInQueue = async (i: number) => {
@@ -355,6 +369,11 @@ function App() {
 		}
 		if (key.name === "x" && focus !== "search") {
 			queueShuffle();
+			return;
+		}
+		if (key.name === "p" && focus === "results") {
+			const t = results[selectedIndex];
+			if (t) playFromResults(t);
 			return;
 		}
 		if (key.name === "c" && focus === "playlist") {
@@ -586,9 +605,9 @@ function App() {
 				)}
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
-					Tab: focus • Enter: add/jump • d: remove • [/]: move • x: shuffle •
-					&lt;/&gt;: prev/next • Space: pause • s: stop • m: mode • r: repeat •
-					n: more • c: clear • q: quit
+					Tab: focus • Enter: add • p: play • d: remove • [/]: move • x: shuffle
+					• &lt;/&gt;: prev/next • Space: pause • s: stop • m: mode • r: repeat
+					• n: more • c: clear • q: quit
 				</text>
 			</box>
 		</box>
