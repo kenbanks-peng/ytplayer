@@ -61,12 +61,14 @@ type Request =
 	| { cmd: "play"; track: Track; mode?: PlayMode }
 	| { cmd: "stop" }
 	| { cmd: "pause" }
+	| { cmd: "repeat"; on: boolean }
 	| { cmd: "shutdown" };
 
 export async function runServer(): Promise<void> {
 	let mpv: Subprocess | null = null;
 	let now: Track | null = null;
 	let paused = false;
+	let repeat = false;
 
 	// Adopt an existing mpv if its socket is still alive.
 	const cached = loadState();
@@ -120,6 +122,7 @@ export async function runServer(): Promise<void> {
 				? "--ytdl-format=bestaudio"
 				: "--ytdl-format=bestvideo*+bestaudio/best",
 			mode === "audio" ? "--no-video" : "--force-window=yes",
+			`--loop-file=${repeat ? "inf" : "no"}`,
 			track.url,
 		];
 		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
@@ -141,7 +144,7 @@ export async function runServer(): Promise<void> {
 			case "ping":
 				return { ok: true };
 			case "state":
-				return { now, paused };
+				return { now, paused, repeat };
 			case "play":
 				if (!req.track) return { ok: false, error: "missing track" };
 				await play(req.track, req.mode ?? "audio");
@@ -154,6 +157,12 @@ export async function runServer(): Promise<void> {
 				await sendMpv(["cycle", "pause"]);
 				paused = !paused;
 				return { ok: true, paused };
+			case "repeat":
+				repeat = Boolean(req.on);
+				if (mpv) {
+					await sendMpv(["set_property", "loop-file", repeat ? "inf" : "no"]);
+				}
+				return { ok: true, repeat };
 			case "shutdown": {
 				await stopPlayback();
 				setTimeout(() => process.exit(0), 10);

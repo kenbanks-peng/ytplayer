@@ -13,6 +13,7 @@ export type PlayMode = "audio" | "video";
 export type ServerState = {
 	now: Track | null;
 	paused: boolean;
+	repeat: boolean;
 };
 
 export const SERVER_SOCK = "/tmp/ytplayer.sock";

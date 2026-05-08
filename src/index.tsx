@@ -15,6 +15,7 @@ import {
 	ensureServer,
 	getState,
 	playTrack as playOnServer,
+	setRepeat,
 	stopPlayback,
 	togglePause,
 } from "./client";
@@ -131,6 +132,7 @@ function App() {
 	const [focus, setFocus] = useState<"search" | "results">("search");
 	const [now, setNow] = useState<Track | null>(null);
 	const [paused, setPaused] = useState(false);
+	const [repeat, setRepeatState] = useState(false);
 	const [mode, setMode] = useState<PlayMode>("audio");
 	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -146,6 +148,7 @@ function App() {
 				setNow(state.now);
 				setPaused(state.paused);
 			}
+			if (state) setRepeatState(state.repeat);
 			const cachedSearch = loadSearch();
 			if (cachedSearch && cachedSearch.results.length > 0) {
 				setResults(cachedSearch.results);
@@ -167,6 +170,7 @@ function App() {
 				return cur;
 			});
 			setPaused(state.paused);
+			setRepeatState(state.repeat);
 		}, 1000);
 
 		return () => {
@@ -261,6 +265,12 @@ function App() {
 		}
 		if (key.name === "m" && focus !== "search") {
 			setMode((cur) => (cur === "audio" ? "video" : "audio"));
+			return;
+		}
+		if (key.name === "r" && focus !== "search") {
+			const next = !repeat;
+			setRepeatState(next);
+			setRepeat(next);
 			return;
 		}
 		if (key.name === "s" && focus !== "search") {
@@ -370,7 +380,7 @@ function App() {
 			<box
 				flexDirection="column"
 				border
-				title={` ${mode.toUpperCase()} `}
+				title={` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `}
 				padding={1}
 			>
 				<box flexDirection="row" justifyContent="flex-end">
@@ -397,7 +407,7 @@ function App() {
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
 					Tab: switch focus • Enter: play • Space: pause • s: stop • m: toggle
-					mode • n: load more • c: clear • q/ctrl-c: quit
+					mode • r: repeat • n: load more • c: clear • q/ctrl-c: quit
 				</text>
 			</box>
 		</box>

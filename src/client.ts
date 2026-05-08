@@ -74,3 +74,5 @@ export const playTrack = (track: Track, mode: PlayMode) =>
 export const stopPlayback = () => send<{ ok: boolean }>({ cmd: "stop" });
 export const togglePause = () =>
 	send<{ ok: boolean; paused: boolean }>({ cmd: "pause" });
+export const setRepeat = (on: boolean) =>
+	send<{ ok: boolean; repeat: boolean }>({ cmd: "repeat", on });
