@@ -154,20 +154,22 @@ function App() {
 	useEffect(() => {
 		(async () => {
 			const state = await getState();
+			const q = Array.isArray(state?.queue) ? state.queue : [];
+			const idx = typeof state?.index === "number" ? state.index : -1;
 			if (state) {
-				setQueue(state.queue);
-				setQueueIndex(state.index);
-				setPaused(state.paused);
-				setRepeatState(state.repeat);
-				setMode(state.mode);
+				setQueue(q);
+				setQueueIndex(idx);
+				setPaused(Boolean(state.paused));
+				setRepeatState(Boolean(state.repeat));
+				if (state.mode === "audio" || state.mode === "video")
+					setMode(state.mode);
 			}
 			const cachedSearch = loadSearch();
 			if (cachedSearch && cachedSearch.results.length > 0) {
 				setResults(cachedSearch.results);
 				lastQueryRef.current = cachedSearch.query;
 				setFocus("results");
-				const nowId =
-					state && state.index >= 0 ? state.queue[state.index]?.id : null;
+				const nowId = idx >= 0 ? q[idx]?.id : null;
 				if (nowId) {
 					const i = cachedSearch.results.findIndex((r) => r.id === nowId);
 					if (i >= 0) setSelectedIndex(i);
@@ -178,19 +180,18 @@ function App() {
 		const interval = setInterval(async () => {
 			const state = await getState();
 			if (!state) return;
+			const q = Array.isArray(state.queue) ? state.queue : [];
+			const idx = typeof state.index === "number" ? state.index : -1;
 			setQueue((cur) => {
-				if (
-					cur.length !== state.queue.length ||
-					cur.some((t, i) => t.id !== state.queue[i]?.id)
-				) {
-					return state.queue;
+				if (cur.length !== q.length || cur.some((t, i) => t.id !== q[i]?.id)) {
+					return q;
 				}
 				return cur;
 			});
-			setQueueIndex(state.index);
-			setPaused(state.paused);
-			setRepeatState(state.repeat);
-			setMode(state.mode);
+			setQueueIndex(idx);
+			setPaused(Boolean(state.paused));
+			setRepeatState(Boolean(state.repeat));
+			if (state.mode === "audio" || state.mode === "video") setMode(state.mode);
 		}, 1000);
 
 		return () => {

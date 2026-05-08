@@ -10,16 +10,21 @@ import { connect, createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Subprocess, spawn } from "bun";
-import { type PlayMode, SERVER_SOCK, type Track } from "./protocol";
+import {
+	type PlayMode,
+	PROTOCOL_VERSION,
+	SERVER_SOCK,
+	type Track,
+} from "./protocol";
 
 const MPV_SOCK = "/tmp/ytplayer-mpv.sock";
 
 export function binaryVersion(): string {
+	let mtime = "0";
 	try {
-		return String(statSync(process.execPath).mtimeMs);
-	} catch {
-		return "0";
-	}
+		mtime = String(statSync(process.execPath).mtimeMs);
+	} catch {}
+	return `${PROTOCOL_VERSION}:${mtime}`;
 }
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const STATE_FILE = join(CACHE_DIR, "state.json");
