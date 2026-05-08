@@ -554,29 +554,45 @@ function App() {
 	return (
 		<box flexDirection="column" flexGrow={1} padding={1}>
 			<box
-				flexDirection="row"
+				flexDirection="column"
 				border
-				borderColor={focus === "search" ? theme.accent : theme.border}
-				backgroundColor={
-					focus === "search" ? theme.surfaceOverlay : theme.surface
-				}
-				title=" YouTube Player "
+				title={` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `}
 				padding={1}
-				alignItems="center"
 			>
-				<text>Search: </text>
-				<input
-					value={query}
-					onInput={setQuery}
-					onSubmit={(value) => {
-						const v = typeof value === "string" ? value : query;
-						setQuery(v);
-						doSearch(v);
-					}}
-					placeholder="artist, song, album..."
-					focused={focus === "search"}
-					flexGrow={1}
-				/>
+				<box flexDirection="row" justifyContent="flex-end">
+					<text fg={theme.textMuted}>
+						{results.length > 0 ? `${results.length} results` : ""}
+					</text>
+				</box>
+				{now ? (
+					<>
+						<text>
+							<span fg={paused ? theme.paused : theme.playing}>
+								{paused ? "❚❚" : "▶ "}
+							</span>{" "}
+							{now.title.normalize("NFKC")}
+							{now.uploader ? (
+								<span fg={theme.textMuted}>
+									{" "}
+									— {now.uploader.normalize("NFKC")}
+								</span>
+							) : null}
+							<span fg={theme.textMuted}>
+								{" "}
+								[{queueIndex + 1}/{queue.length}]
+							</span>
+						</text>
+						<text fg={theme.textSubtle} attributes={2}>
+							{now.url}
+						</text>
+					</>
+				) : (
+					<text fg={theme.textMuted}>Nothing playing</text>
+				)}
+				<text fg={theme.textMuted}>{status}</text>
+				<text fg={theme.textSubtle} attributes={2}>
+					? for keys
+				</text>
 			</box>
 
 			<box flexDirection="row" flexGrow={1}>
@@ -654,45 +670,29 @@ function App() {
 			</box>
 
 			<box
-				flexDirection="column"
+				flexDirection="row"
 				border
-				title={` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `}
+				borderColor={focus === "search" ? theme.accent : theme.border}
+				backgroundColor={
+					focus === "search" ? theme.surfaceOverlay : theme.surface
+				}
+				title=" YouTube Player "
 				padding={1}
+				alignItems="center"
 			>
-				<box flexDirection="row" justifyContent="flex-end">
-					<text fg={theme.textMuted}>
-						{results.length > 0 ? `${results.length} results` : ""}
-					</text>
-				</box>
-				{now ? (
-					<>
-						<text>
-							<span fg={paused ? theme.paused : theme.playing}>
-								{paused ? "❚❚" : "▶ "}
-							</span>{" "}
-							{now.title.normalize("NFKC")}
-							{now.uploader ? (
-								<span fg={theme.textMuted}>
-									{" "}
-									— {now.uploader.normalize("NFKC")}
-								</span>
-							) : null}
-							<span fg={theme.textMuted}>
-								{" "}
-								[{queueIndex + 1}/{queue.length}]
-							</span>
-						</text>
-						<text fg={theme.textSubtle} attributes={2}>
-							{now.url}
-						</text>
-					</>
-				) : (
-					<text fg={theme.textMuted}>Nothing playing</text>
-				)}
-				<text fg={theme.textMuted}>{status}</text>
-				<text fg={theme.textSubtle} attributes={2}>
-					? for keys
-				</text>
+				<text>Search: </text>
+				<input
+					value={query}
+					onInput={setQuery}
+					onSubmit={(value) => {
+						const v = typeof value === "string" ? value : query;
+						setQuery(v);
+						doSearch(v);
+					}}
+					placeholder="artist, song, album..."
+					focused={focus === "search"}
+					flexGrow={1}
+				/>
 			</box>
 			{showHelp ? (
 				<box
