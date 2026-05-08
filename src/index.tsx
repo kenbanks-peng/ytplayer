@@ -556,6 +556,10 @@ function App() {
 			<box
 				flexDirection="row"
 				border
+				borderColor={focus === "search" ? theme.accent : theme.border}
+				backgroundColor={
+					focus === "search" ? theme.surfaceOverlay : theme.surface
+				}
 				title=" YouTube Player "
 				padding={1}
 				alignItems="center"
@@ -581,6 +585,10 @@ function App() {
 					flexBasis={resultsW}
 					flexDirection="column"
 					border
+					borderColor={focus === "results" ? theme.accent : theme.border}
+					backgroundColor={
+						focus === "results" ? theme.surfaceOverlay : theme.surface
+					}
 					title={` Results ${searching ? "(searching...)" : ""} `}
 				>
 					{options.length > 0 ? (
@@ -618,6 +626,10 @@ function App() {
 					flexBasis={playlistW}
 					flexDirection="column"
 					border
+					borderColor={focus === "playlist" ? theme.accent : theme.border}
+					backgroundColor={
+						focus === "playlist" ? theme.surfaceOverlay : theme.surface
+					}
 					title={` Playlist (${queue.length}) `}
 				>
 					{playlistOptions.length > 0 ? (
