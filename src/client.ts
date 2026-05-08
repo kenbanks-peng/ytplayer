@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, openSync } from "node:fs";
 import { connect } from "node:net";
 import { spawn } from "bun";
 import {
@@ -7,6 +7,8 @@ import {
 	type ServerState,
 	type Track,
 } from "./protocol";
+
+const SERVER_LOG = "/tmp/ytplayer-server.log";
 
 function send<T = unknown>(req: unknown, timeoutMs = 2000): Promise<T | null> {
 	return new Promise((resolve) => {
@@ -45,15 +47,16 @@ export async function ensureServer(): Promise<void> {
 		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
 		if (resp?.ok) return;
 	}
-	const exe = process.argv[0];
+	const exe = process.execPath;
 	if (!exe) throw new Error("cannot determine executable to spawn server");
 	const args = [
 		...process.argv.slice(1).filter((a) => a !== "server"),
 		"server",
 	];
+	const log = openSync(SERVER_LOG, "a");
 	spawn([exe, ...args], {
-		stdout: "ignore",
-		stderr: "ignore",
+		stdout: log,
+		stderr: log,
 		stdin: "ignore",
 	});
 	for (let i = 0; i < 50; i++) {
@@ -62,7 +65,7 @@ export async function ensureServer(): Promise<void> {
 		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
 		if (resp?.ok) return;
 	}
-	throw new Error("ytplayer server failed to start");
+	throw new Error(`ytplayer server failed to start (see ${SERVER_LOG})`);
 }
 
 export const getState = () => send<ServerState>({ cmd: "state" });
