@@ -1,6 +1,7 @@
 import {
 	existsSync,
 	mkdirSync,
+	openSync,
 	readFileSync,
 	statSync,
 	unlinkSync,
@@ -199,13 +200,22 @@ export async function runServer(): Promise<void> {
 			"--no-terminal",
 			"--idle=yes",
 			"--keep-open=no",
+			"--prefetch-playlist=yes",
+			"--gapless-audio=yes",
 			`--input-ipc-server=${MPV_SOCK}`,
 			mode === "audio"
 				? "--ytdl-format=bestaudio"
 				: "--ytdl-format=bestvideo*+bestaudio/best",
-			mode === "audio" ? "--no-video" : "--force-window=yes",
+			mode === "audio" ? "--no-video" : "--force-window=immediate",
 		];
-		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
+		let logFd: number;
+		try {
+			mkdirSync(CACHE_DIR, { recursive: true });
+			logFd = openSync(join(CACHE_DIR, "mpv.log"), "a");
+		} catch {
+			logFd = 2;
+		}
+		const proc = spawn(args, { stdout: logFd, stderr: logFd });
 		mpv = proc;
 		proc.exited.then(() => {
 			if (mpv === proc) {
