@@ -589,7 +589,7 @@ function App() {
 							<span fg={paused ? "yellow" : "green"}>
 								{paused ? "❚❚" : "▶ "}
 							</span>{" "}
-							<strong>{now.title}</strong>
+							{now.title}
 							{now.uploader ? <span fg="gray"> — {now.uploader}</span> : null}
 							<span fg="gray">
 								{" "}
