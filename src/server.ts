@@ -63,6 +63,8 @@ type Request =
 	| { cmd: "queue:add"; track: Track; mode?: PlayMode }
 	| { cmd: "queue:remove"; id: string }
 	| { cmd: "queue:jump"; index: number }
+	| { cmd: "queue:move"; from: number; to: number }
+	| { cmd: "queue:shuffle" }
 	| { cmd: "queue:clear" }
 	| { cmd: "next" }
 	| { cmd: "prev" }
@@ -342,6 +344,56 @@ export async function runServer(): Promise<void> {
 					await loadQueueIntoMpv(req.index);
 				} else {
 					await mpvCmd(["set_property", "playlist-pos", req.index]);
+				}
+				return { ok: true };
+			}
+			case "queue:move": {
+				const { from, to } = req;
+				if (
+					from < 0 ||
+					from >= queue.length ||
+					to < 0 ||
+					to >= queue.length ||
+					from === to
+				)
+					return { ok: true };
+				const [item] = queue.splice(from, 1);
+				if (!item) return { ok: true };
+				queue.splice(to, 0, item);
+				if (index >= 0) {
+					if (index === from) index = to;
+					else if (from < index && to >= index) index--;
+					else if (from > index && to <= index) index++;
+				}
+				persist();
+				if (mpvReady) {
+					const mpvTo = to > from ? to + 1 : to;
+					await mpvCmd(["playlist-move", from, mpvTo]);
+				}
+				return { ok: true };
+			}
+			case "queue:shuffle": {
+				if (queue.length < 2) return { ok: true };
+				const currentId = index >= 0 ? (queue[index]?.id ?? null) : null;
+				for (let i = queue.length - 1; i > 0; i--) {
+					const j = Math.floor(Math.random() * (i + 1));
+					const a = queue[i];
+					const b = queue[j];
+					if (a && b) {
+						queue[i] = b;
+						queue[j] = a;
+					}
+				}
+				if (currentId) {
+					const newIdx = queue.findIndex((t) => t.id === currentId);
+					if (newIdx >= 0) index = newIdx;
+				}
+				persist();
+				if (mpvReady) {
+					await killMpv();
+					const ok = await spawnMpv();
+					if (!ok) return { ok: false, error: "mpv failed to start" };
+					await loadQueueIntoMpv(index >= 0 ? index : 0);
 				}
 				return { ok: true };
 			}

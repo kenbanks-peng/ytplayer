@@ -87,6 +87,10 @@ export const queueRemove = (id: string) =>
 export const queueJump = (index: number) =>
 	send<{ ok: boolean }>({ cmd: "queue:jump", index });
 export const queueClear = () => send<{ ok: boolean }>({ cmd: "queue:clear" });
+export const queueMove = (from: number, to: number) =>
+	send<{ ok: boolean }>({ cmd: "queue:move", from, to });
+export const queueShuffle = () =>
+	send<{ ok: boolean }>({ cmd: "queue:shuffle" });
 export const nextTrack = () => send<{ ok: boolean }>({ cmd: "next" });
 export const prevTrack = () => send<{ ok: boolean }>({ cmd: "prev" });
 export const stopPlayback = () => send<{ ok: boolean }>({ cmd: "stop" });

@@ -17,8 +17,11 @@ import {
 	nextTrack,
 	prevTrack,
 	queueAdd,
+	queueClear,
 	queueJump,
+	queueMove,
 	queueRemove,
+	queueShuffle,
 	setMode as setModeOnServer,
 	setRepeat,
 	stopPlayback,
@@ -350,6 +353,67 @@ function App() {
 			if (t) removeFromQueue(t.id);
 			return;
 		}
+		if (key.name === "x" && focus !== "search") {
+			queueShuffle();
+			return;
+		}
+		if (key.name === "c" && focus === "playlist") {
+			queueClear();
+			setQueue([]);
+			setQueueIndex(-1);
+			setPlaylistSelected(0);
+			return;
+		}
+		if (
+			(key.name === "[" || key.name === "bracketleft") &&
+			focus === "playlist"
+		) {
+			const from = playlistSelected;
+			const to = from - 1;
+			if (from > 0 && to >= 0) {
+				setQueue((cur) => {
+					const next = [...cur];
+					const [item] = next.splice(from, 1);
+					if (item) next.splice(to, 0, item);
+					return next;
+				});
+				setQueueIndex((idx) => {
+					if (idx < 0) return idx;
+					if (idx === from) return to;
+					if (from < idx && to >= idx) return idx - 1;
+					if (from > idx && to <= idx) return idx + 1;
+					return idx;
+				});
+				setPlaylistSelected(to);
+				queueMove(from, to);
+			}
+			return;
+		}
+		if (
+			(key.name === "]" || key.name === "bracketright") &&
+			focus === "playlist"
+		) {
+			const from = playlistSelected;
+			const to = from + 1;
+			if (from >= 0 && to < queue.length) {
+				setQueue((cur) => {
+					const next = [...cur];
+					const [item] = next.splice(from, 1);
+					if (item) next.splice(to, 0, item);
+					return next;
+				});
+				setQueueIndex((idx) => {
+					if (idx < 0) return idx;
+					if (idx === from) return to;
+					if (from < idx && to >= idx) return idx - 1;
+					if (from > idx && to <= idx) return idx + 1;
+					return idx;
+				});
+				setPlaylistSelected(to);
+				queueMove(from, to);
+			}
+			return;
+		}
 		if (key.name === "c" && focus === "results") {
 			setResults([]);
 			setSelectedIndex(0);
@@ -522,9 +586,9 @@ function App() {
 				)}
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
-					Tab: focus • Enter: add/jump • d: remove • &lt;/&gt;: prev/next •
-					Space: pause • s: stop • m: mode • r: repeat • n: more • c: clear • q:
-					quit
+					Tab: focus • Enter: add/jump • d: remove • [/]: move • x: shuffle •
+					&lt;/&gt;: prev/next • Space: pause • s: stop • m: mode • r: repeat •
+					n: more • c: clear • q: quit
 				</text>
 			</box>
 		</box>
