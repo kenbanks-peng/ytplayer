@@ -2,6 +2,7 @@ import {
 	existsSync,
 	mkdirSync,
 	readFileSync,
+	statSync,
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
@@ -12,6 +13,14 @@ import { type Subprocess, spawn } from "bun";
 import { type PlayMode, SERVER_SOCK, type Track } from "./protocol";
 
 const MPV_SOCK = "/tmp/ytplayer-mpv.sock";
+
+export function binaryVersion(): string {
+	try {
+		return String(statSync(process.execPath).mtimeMs);
+	} catch {
+		return "0";
+	}
+}
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const STATE_FILE = join(CACHE_DIR, "state.json");
 
@@ -122,27 +131,28 @@ export async function runServer(): Promise<void> {
 				? "--ytdl-format=bestaudio"
 				: "--ytdl-format=bestvideo*+bestaudio/best",
 			mode === "audio" ? "--no-video" : "--force-window=yes",
-			`--loop-file=${repeat ? "inf" : "no"}`,
 			track.url,
 		];
 		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
 		mpv = proc;
 		proc.exited.then(() => {
-			if (mpv === proc) {
-				mpv = null;
-				if (now?.id === track.id) {
-					now = null;
-					paused = false;
-					saveState(null);
-				}
+			if (mpv !== proc) return;
+			mpv = null;
+			if (now?.id !== track.id) return;
+			if (repeat) {
+				play(track, mode);
+				return;
 			}
+			now = null;
+			paused = false;
+			saveState(null);
 		});
 	};
 
 	const handle = async (req: Request): Promise<unknown> => {
 		switch (req.cmd) {
 			case "ping":
-				return { ok: true };
+				return { ok: true, version: binaryVersion() };
 			case "state":
 				return { now, paused, repeat };
 			case "play":
@@ -159,9 +169,6 @@ export async function runServer(): Promise<void> {
 				return { ok: true, paused };
 			case "repeat":
 				repeat = Boolean(req.on);
-				if (mpv) {
-					await sendMpv(["set_property", "loop-file", repeat ? "inf" : "no"]);
-				}
 				return { ok: true, repeat };
 			case "shutdown": {
 				await stopPlayback();

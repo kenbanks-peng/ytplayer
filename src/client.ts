@@ -7,6 +7,7 @@ import {
 	type ServerState,
 	type Track,
 } from "./protocol";
+import { binaryVersion } from "./server";
 
 const SERVER_LOG = "/tmp/ytplayer-server.log";
 
@@ -43,9 +44,19 @@ function send<T = unknown>(req: unknown, timeoutMs = 2000): Promise<T | null> {
 }
 
 export async function ensureServer(): Promise<void> {
+	const expected = binaryVersion();
 	if (existsSync(SERVER_SOCK)) {
-		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
-		if (resp?.ok) return;
+		const resp = await send<{ ok?: boolean; version?: string }>(
+			{ cmd: "ping" },
+			500,
+		);
+		if (resp?.ok) {
+			if (resp.version === expected) return;
+			await send({ cmd: "shutdown" }, 1000);
+			for (let i = 0; i < 30 && existsSync(SERVER_SOCK); i++) {
+				await new Promise((r) => setTimeout(r, 100));
+			}
+		}
 	}
 	const exe = process.execPath;
 	if (!exe) throw new Error("cannot determine executable to spawn server");
