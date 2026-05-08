@@ -80,10 +80,19 @@ export async function ensureServer(): Promise<void> {
 }
 
 export const getState = () => send<ServerState>({ cmd: "state" });
-export const playTrack = (track: Track, mode: PlayMode) =>
-	send<{ ok: boolean }>({ cmd: "play", track, mode });
+export const queueAdd = (track: Track, mode: PlayMode) =>
+	send<{ ok: boolean }>({ cmd: "queue:add", track, mode });
+export const queueRemove = (id: string) =>
+	send<{ ok: boolean }>({ cmd: "queue:remove", id });
+export const queueJump = (index: number) =>
+	send<{ ok: boolean }>({ cmd: "queue:jump", index });
+export const queueClear = () => send<{ ok: boolean }>({ cmd: "queue:clear" });
+export const nextTrack = () => send<{ ok: boolean }>({ cmd: "next" });
+export const prevTrack = () => send<{ ok: boolean }>({ cmd: "prev" });
 export const stopPlayback = () => send<{ ok: boolean }>({ cmd: "stop" });
 export const togglePause = () =>
 	send<{ ok: boolean; paused: boolean }>({ cmd: "pause" });
 export const setRepeat = (on: boolean) =>
 	send<{ ok: boolean; repeat: boolean }>({ cmd: "repeat", on });
+export const setMode = (mode: PlayMode) =>
+	send<{ ok: boolean; mode: PlayMode }>({ cmd: "mode", mode });

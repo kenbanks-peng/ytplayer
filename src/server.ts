@@ -24,18 +24,28 @@ export function binaryVersion(): string {
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const STATE_FILE = join(CACHE_DIR, "state.json");
 
-function saveState(track: Track | null) {
+type PersistedState = {
+	queue: Track[];
+	index: number;
+	repeat: boolean;
+	mode: PlayMode;
+};
+
+function saveStateFile(s: PersistedState) {
 	try {
 		mkdirSync(CACHE_DIR, { recursive: true });
-		if (track) writeFileSync(STATE_FILE, JSON.stringify(track));
-		else if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
+		if (s.queue.length === 0 && !s.repeat) {
+			if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
+		} else {
+			writeFileSync(STATE_FILE, JSON.stringify(s));
+		}
 	} catch {}
 }
 
-function loadState(): Track | null {
+function loadStateFile(): PersistedState | null {
 	try {
 		if (!existsSync(STATE_FILE)) return null;
-		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Track;
+		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as PersistedState;
 	} catch {
 		return null;
 	}
@@ -67,36 +77,54 @@ function sendMpv(cmd: MpvCommandValue[]): Promise<unknown> {
 type Request =
 	| { cmd: "ping" }
 	| { cmd: "state" }
-	| { cmd: "play"; track: Track; mode?: PlayMode }
+	| { cmd: "queue:add"; track: Track; mode?: PlayMode }
+	| { cmd: "queue:remove"; id: string }
+	| { cmd: "queue:jump"; index: number }
+	| { cmd: "queue:clear" }
+	| { cmd: "next" }
+	| { cmd: "prev" }
 	| { cmd: "stop" }
 	| { cmd: "pause" }
 	| { cmd: "repeat"; on: boolean }
+	| { cmd: "mode"; mode: PlayMode }
 	| { cmd: "shutdown" };
 
 export async function runServer(): Promise<void> {
 	let mpv: Subprocess | null = null;
-	let now: Track | null = null;
+	let queue: Track[] = [];
+	let index = -1;
 	let paused = false;
 	let repeat = false;
+	let mode: PlayMode = "audio";
+
+	const persist = () => saveStateFile({ queue, index, repeat, mode });
 
 	// Adopt an existing mpv if its socket is still alive.
-	const cached = loadState();
-	if (cached && existsSync(MPV_SOCK)) {
-		const resp = (await sendMpv(["get_property", "pause"])) as {
-			error?: string;
-			data?: boolean;
-		} | null;
-		if (resp && resp.error === "success") {
-			now = cached;
-			paused = Boolean(resp.data);
+	const cached = loadStateFile();
+	if (cached) {
+		queue = cached.queue ?? [];
+		index = cached.index ?? -1;
+		repeat = Boolean(cached.repeat);
+		mode = cached.mode ?? "audio";
+		if (queue.length > 0 && index >= 0 && existsSync(MPV_SOCK)) {
+			const resp = (await sendMpv(["get_property", "pause"])) as {
+				error?: string;
+				data?: boolean;
+			} | null;
+			if (resp && resp.error === "success") {
+				paused = Boolean(resp.data);
+			} else {
+				index = -1;
+				try {
+					unlinkSync(MPV_SOCK);
+				} catch {}
+				persist();
+			}
 		} else {
-			saveState(null);
-			try {
-				unlinkSync(MPV_SOCK);
-			} catch {}
+			// No live mpv. Keep queue, but nothing is playing right now.
+			index = -1;
+			persist();
 		}
-	} else if (cached) {
-		saveState(null);
 	}
 
 	const stopPlayback = async () => {
@@ -113,16 +141,25 @@ export async function runServer(): Promise<void> {
 				unlinkSync(MPV_SOCK);
 			} catch {}
 		}
-		now = null;
 		paused = false;
-		saveState(null);
 	};
 
-	const play = async (track: Track, mode: PlayMode) => {
+	const playIndex = async (i: number): Promise<void> => {
 		await stopPlayback();
-		now = track;
+		if (i < 0 || i >= queue.length) {
+			index = -1;
+			persist();
+			return;
+		}
+		index = i;
 		paused = false;
-		saveState(track);
+		const track = queue[i];
+		if (!track) {
+			index = -1;
+			persist();
+			return;
+		}
+		persist();
 		const args = [
 			"mpv",
 			"--no-terminal",
@@ -136,16 +173,21 @@ export async function runServer(): Promise<void> {
 		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
 		mpv = proc;
 		proc.exited.then(() => {
-			if (mpv !== proc) return;
+			if (mpv !== proc) return; // superseded by jump/next/prev/remove/stop
 			mpv = null;
-			if (now?.id !== track.id) return;
-			if (repeat) {
-				play(track, mode);
+			// Natural end of current track: advance.
+			const nextI = index + 1;
+			if (nextI < queue.length) {
+				playIndex(nextI);
 				return;
 			}
-			now = null;
+			if (repeat && queue.length > 0) {
+				playIndex(0);
+				return;
+			}
+			index = -1;
 			paused = false;
-			saveState(null);
+			persist();
 		});
 	};
 
@@ -154,22 +196,103 @@ export async function runServer(): Promise<void> {
 			case "ping":
 				return { ok: true, version: binaryVersion() };
 			case "state":
-				return { now, paused, repeat };
-			case "play":
+				return { queue, index, paused, repeat, mode };
+			case "queue:add": {
 				if (!req.track) return { ok: false, error: "missing track" };
-				await play(req.track, req.mode ?? "audio");
+				if (req.mode) mode = req.mode;
+				queue.push(req.track);
+				if (index < 0 || !mpv) {
+					await playIndex(queue.length - 1);
+				} else {
+					persist();
+				}
 				return { ok: true };
+			}
+			case "queue:remove": {
+				const i = queue.findIndex((t) => t.id === req.id);
+				if (i < 0) return { ok: true };
+				const wasCurrent = i === index;
+				queue.splice(i, 1);
+				if (wasCurrent) {
+					// The next track shifted into position i. Play it; if past end, wrap or stop.
+					if (i < queue.length) {
+						await playIndex(i);
+					} else if (repeat && queue.length > 0) {
+						await playIndex(0);
+					} else {
+						await stopPlayback();
+						index = -1;
+						persist();
+					}
+				} else if (i < index) {
+					index -= 1;
+					persist();
+				} else {
+					persist();
+				}
+				return { ok: true };
+			}
+			case "queue:jump": {
+				await playIndex(req.index);
+				return { ok: true };
+			}
+			case "queue:clear": {
+				await stopPlayback();
+				queue = [];
+				index = -1;
+				persist();
+				return { ok: true };
+			}
+			case "next": {
+				if (queue.length === 0) return { ok: true };
+				const cur = index < 0 ? -1 : index;
+				let target = cur + 1;
+				if (target >= queue.length) {
+					if (!repeat) {
+						await stopPlayback();
+						index = -1;
+						persist();
+						return { ok: true };
+					}
+					target = 0;
+				}
+				await playIndex(target);
+				return { ok: true };
+			}
+			case "prev": {
+				if (queue.length === 0) return { ok: true };
+				const cur = index < 0 ? queue.length : index;
+				let target = cur - 1;
+				if (target < 0) {
+					if (!repeat) {
+						await playIndex(0);
+						return { ok: true };
+					}
+					target = queue.length - 1;
+				}
+				await playIndex(target);
+				return { ok: true };
+			}
 			case "stop":
 				await stopPlayback();
+				index = -1;
+				persist();
 				return { ok: true };
 			case "pause":
-				if (!now) return { ok: true, paused: false };
+				if (index < 0 || !mpv) return { ok: true, paused: false };
 				await sendMpv(["cycle", "pause"]);
 				paused = !paused;
 				return { ok: true, paused };
 			case "repeat":
 				repeat = Boolean(req.on);
+				persist();
 				return { ok: true, repeat };
+			case "mode":
+				if (req.mode === "audio" || req.mode === "video") {
+					mode = req.mode;
+					persist();
+				}
+				return { ok: true, mode };
 			case "shutdown": {
 				await stopPlayback();
 				setTimeout(() => process.exit(0), 10);

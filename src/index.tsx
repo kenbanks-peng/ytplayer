@@ -14,7 +14,12 @@ import { useEffect, useRef, useState } from "react";
 import {
 	ensureServer,
 	getState,
-	playTrack as playOnServer,
+	nextTrack,
+	prevTrack,
+	queueAdd,
+	queueJump,
+	queueRemove,
+	setMode as setModeOnServer,
 	setRepeat,
 	stopPlayback,
 	togglePause,
@@ -124,38 +129,46 @@ async function searchYouTube(
 	return tracks;
 }
 
+type Focus = "search" | "results" | "playlist";
+
 function App() {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<Track[]>([]);
 	const [searching, setSearching] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [focus, setFocus] = useState<"search" | "results">("search");
-	const [now, setNow] = useState<Track | null>(null);
+	const [focus, setFocus] = useState<Focus>("search");
+	const [queue, setQueue] = useState<Track[]>([]);
+	const [queueIndex, setQueueIndex] = useState(-1);
 	const [paused, setPaused] = useState(false);
 	const [repeat, setRepeatState] = useState(false);
 	const [mode, setMode] = useState<PlayMode>("audio");
 	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [playlistSelected, setPlaylistSelected] = useState(0);
 	const abortRef = useRef<AbortController | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
 
 	const lastQueryRef = useRef("");
+	const now = queueIndex >= 0 ? (queue[queueIndex] ?? null) : null;
 
 	useEffect(() => {
 		(async () => {
 			const state = await getState();
-			if (state?.now) {
-				setNow(state.now);
+			if (state) {
+				setQueue(state.queue);
+				setQueueIndex(state.index);
 				setPaused(state.paused);
+				setRepeatState(state.repeat);
+				setMode(state.mode);
 			}
-			if (state) setRepeatState(state.repeat);
 			const cachedSearch = loadSearch();
 			if (cachedSearch && cachedSearch.results.length > 0) {
 				setResults(cachedSearch.results);
 				lastQueryRef.current = cachedSearch.query;
 				setFocus("results");
-				if (state?.now) {
-					const nowId = state.now.id;
+				const nowId =
+					state && state.index >= 0 ? state.queue[state.index]?.id : null;
+				if (nowId) {
 					const i = cachedSearch.results.findIndex((r) => r.id === nowId);
 					if (i >= 0) setSelectedIndex(i);
 				}
@@ -165,12 +178,19 @@ function App() {
 		const interval = setInterval(async () => {
 			const state = await getState();
 			if (!state) return;
-			setNow((cur) => {
-				if (cur?.id !== state.now?.id) return state.now;
+			setQueue((cur) => {
+				if (
+					cur.length !== state.queue.length ||
+					cur.some((t, i) => t.id !== state.queue[i]?.id)
+				) {
+					return state.queue;
+				}
 				return cur;
 			});
+			setQueueIndex(state.index);
 			setPaused(state.paused);
 			setRepeatState(state.repeat);
+			setMode(state.mode);
 		}, 1000);
 
 		return () => {
@@ -178,6 +198,17 @@ function App() {
 			clearInterval(interval);
 		};
 	}, []);
+
+	// Keep playlist selection in range as queue mutates.
+	useEffect(() => {
+		if (queue.length === 0) {
+			if (playlistSelected !== 0) setPlaylistSelected(0);
+			return;
+		}
+		if (playlistSelected >= queue.length) {
+			setPlaylistSelected(queue.length - 1);
+		}
+	}, [queue.length, playlistSelected]);
 
 	const doSearch = async (q: string = query) => {
 		if (!q.trim() || searching) return;
@@ -235,18 +266,32 @@ function App() {
 		}
 	};
 
-	const playTrack = async (t: Track, playMode: PlayMode = mode) => {
-		setNow(t);
-		setPaused(false);
+	const addToQueue = async (t: Track) => {
 		setStatus("");
-		const i = results.findIndex((r) => r.id === t.id);
-		if (i >= 0) setSelectedIndex(i);
-		await playOnServer(t, playMode);
+		const wasEmpty = queue.length === 0;
+		setQueue((cur) => [...cur, t]);
+		if (wasEmpty) setQueueIndex(0);
+		await queueAdd(t, mode);
+	};
+
+	const jumpInQueue = async (i: number) => {
+		if (i < 0 || i >= queue.length) return;
+		setQueueIndex(i);
+		setPaused(false);
+		await queueJump(i);
+	};
+
+	const removeFromQueue = async (id: string) => {
+		await queueRemove(id);
+		// Optimistic local update — server poll will reconcile.
+		setQueue((cur) => cur.filter((t) => t.id !== id));
 	};
 
 	useKeyboard((key) => {
 		if (key.name === "tab") {
-			setFocus((f) => (f === "search" ? "results" : "search"));
+			setFocus((f) =>
+				f === "search" ? "results" : f === "results" ? "playlist" : "search",
+			);
 			return;
 		}
 		if (
@@ -264,7 +309,9 @@ function App() {
 			return;
 		}
 		if (key.name === "m" && focus !== "search") {
-			setMode((cur) => (cur === "audio" ? "video" : "audio"));
+			const next: PlayMode = mode === "audio" ? "video" : "audio";
+			setMode(next);
+			setModeOnServer(next);
 			return;
 		}
 		if (key.name === "r" && focus !== "search") {
@@ -275,7 +322,7 @@ function App() {
 		}
 		if (key.name === "s" && focus !== "search") {
 			stopPlayback();
-			setNow(null);
+			setQueueIndex(-1);
 			setStatus("Stopped");
 			return;
 		}
@@ -283,7 +330,26 @@ function App() {
 			loadMore();
 			return;
 		}
-		if (key.name === "c" && focus !== "search") {
+		if (
+			(key.name === ">" || (key.shift && key.name === "period")) &&
+			focus !== "search"
+		) {
+			nextTrack();
+			return;
+		}
+		if (
+			(key.name === "<" || (key.shift && key.name === "comma")) &&
+			focus !== "search"
+		) {
+			prevTrack();
+			return;
+		}
+		if (key.name === "d" && focus === "playlist") {
+			const t = queue[playlistSelected];
+			if (t) removeFromQueue(t.id);
+			return;
+		}
+		if (key.name === "c" && focus === "results") {
 			setResults([]);
 			setSelectedIndex(0);
 			setError(null);
@@ -295,13 +361,15 @@ function App() {
 		}
 	});
 
-	// Layout: <pg> <title>  <uploader>  <views>  <duration>
-	// The select renderable adds ~4 chars of selection chrome, plus border + padding.
+	// Layout: results pane gets ~60%, playlist pane ~40%.
 	const inner = Math.max(52, termWidth - 8);
+	const resultsW = Math.floor(inner * 0.6);
+	const playlistW = inner - resultsW;
+
 	const durW = 7;
 	const viewsW = 7;
-	const uploaderW = Math.max(12, Math.min(28, Math.floor(inner * 0.25)));
-	const titleW = Math.max(10, inner - durW - viewsW - uploaderW - 8);
+	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
+	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
 	const options = results.map((t) => {
 		const marker = pageMarker(t.page);
@@ -311,6 +379,19 @@ function App() {
 		const duration = fmtDur(t.duration).padStart(durW, " ");
 		return {
 			name: `${marker} ${title}  ${uploader}  ${views}  ${duration}`,
+			description: "",
+			value: t.id,
+		};
+	});
+
+	const plDurW = 6;
+	const plTitleW = Math.max(10, playlistW - plDurW - 6);
+	const playlistOptions = queue.map((t, i) => {
+		const marker = i === queueIndex ? "▶" : " ";
+		const title = fitCol(t.title, plTitleW);
+		const duration = fmtDur(t.duration).padStart(plDurW, " ");
+		return {
+			name: `${marker} ${title}  ${duration}`,
 			description: "",
 			value: t.id,
 		};
@@ -340,41 +421,70 @@ function App() {
 				/>
 			</box>
 
-			<box
-				flexGrow={1}
-				flexDirection="column"
-				border
-				title={` Results ${searching ? "(searching...)" : ""} `}
-			>
-				{options.length > 0 ? (
-					<>
-						<text fg="gray" attributes={2}>
-							{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
-						</text>
+			<box flexDirection="row" flexGrow={1}>
+				<box
+					flexGrow={1}
+					flexBasis={resultsW}
+					flexDirection="column"
+					border
+					title={` Results ${searching ? "(searching...)" : ""} `}
+				>
+					{options.length > 0 ? (
+						<>
+							<text fg="gray" attributes={2}>
+								{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
+							</text>
+							<select
+								options={options}
+								focused={focus === "results"}
+								showDescription={false}
+								selectedIndex={selectedIndex}
+								onChange={(i: number) => setSelectedIndex(i)}
+								onSelect={(i: number) => {
+									const track = results[i];
+									if (track) addToQueue(track);
+								}}
+								flexGrow={1}
+							/>
+						</>
+					) : (
+						<box padding={1}>
+							<text fg="gray">
+								{error
+									? `Error: ${error}`
+									: searching
+										? "Searching..."
+										: "No results yet."}
+							</text>
+						</box>
+					)}
+				</box>
+
+				<box
+					flexBasis={playlistW}
+					flexDirection="column"
+					border
+					title={` Playlist (${queue.length}) `}
+				>
+					{playlistOptions.length > 0 ? (
 						<select
-							options={options}
-							focused={focus === "results"}
+							options={playlistOptions}
+							focused={focus === "playlist"}
 							showDescription={false}
-							selectedIndex={selectedIndex}
-							onChange={(i: number) => setSelectedIndex(i)}
-							onSelect={(i: number) => {
-								const track = results[i];
-								if (track) playTrack(track);
-							}}
+							selectedIndex={Math.min(
+								playlistSelected,
+								Math.max(0, playlistOptions.length - 1),
+							)}
+							onChange={(i: number) => setPlaylistSelected(i)}
+							onSelect={(i: number) => jumpInQueue(i)}
 							flexGrow={1}
 						/>
-					</>
-				) : (
-					<box padding={1}>
-						<text fg="gray">
-							{error
-								? `Error: ${error}`
-								: searching
-									? "Searching..."
-									: "No results yet."}
-						</text>
-					</box>
-				)}
+					) : (
+						<box padding={1}>
+							<text fg="gray">Empty. Enter on a result to add.</text>
+						</box>
+					)}
+				</box>
 			</box>
 
 			<box
@@ -396,6 +506,10 @@ function App() {
 							</span>{" "}
 							<strong>{now.title}</strong>
 							{now.uploader ? <span fg="gray"> — {now.uploader}</span> : null}
+							<span fg="gray">
+								{" "}
+								[{queueIndex + 1}/{queue.length}]
+							</span>
 						</text>
 						<text fg="gray" attributes={2}>
 							{now.url}
@@ -406,8 +520,9 @@ function App() {
 				)}
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
-					Tab: switch focus • Enter: play • Space: pause • s: stop • m: toggle
-					mode • r: repeat • n: load more • c: clear • q/ctrl-c: quit
+					Tab: focus • Enter: add/jump • d: remove • &lt;/&gt;: prev/next •
+					Space: pause • s: stop • m: mode • r: repeat • n: more • c: clear • q:
+					quit
 				</text>
 			</box>
 		</box>

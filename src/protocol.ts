@@ -11,9 +11,11 @@ export type Track = {
 export type PlayMode = "audio" | "video";
 
 export type ServerState = {
-	now: Track | null;
+	queue: Track[];
+	index: number;
 	paused: boolean;
 	repeat: boolean;
+	mode: PlayMode;
 };
 
 export const SERVER_SOCK = "/tmp/ytplayer.sock";
