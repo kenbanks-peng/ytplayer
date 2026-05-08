@@ -5,23 +5,28 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
-import { connect } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createCliRenderer } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { type Subprocess, spawn } from "bun";
+import { spawn } from "bun";
 import { useEffect, useRef, useState } from "react";
+import {
+	ensureServer,
+	getState,
+	playTrack as playOnServer,
+	stopPlayback,
+	togglePause,
+} from "./client";
+import type { PlayMode, Track } from "./protocol";
+import { runServer } from "./server";
 
-type Track = {
-	id: string;
-	title: string;
-	url: string;
-	uploader?: string;
-	duration?: number;
-	views?: number;
-	page: number;
-};
+if (process.argv.includes("server")) {
+	await runServer();
+	process.exit(0);
+}
+
+await ensureServer();
 
 const PAGE_MARKERS = ["●", "○", "◆", "◇", "▲", "△", "■", "□"];
 const pageMarker = (page: number): string =>
@@ -39,29 +44,8 @@ function fmtCount(n?: number): string {
 	return String(n);
 }
 
-type MpvCommandValue = string | number | boolean;
-
-const MPV_SOCK = "/tmp/ytmusic-mpv.sock";
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
-const STATE_FILE = join(CACHE_DIR, "state.json");
 const SEARCH_FILE = join(CACHE_DIR, "search.json");
-
-function saveState(track: Track | null) {
-	try {
-		mkdirSync(CACHE_DIR, { recursive: true });
-		if (track) writeFileSync(STATE_FILE, JSON.stringify(track));
-		else if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
-	} catch {}
-}
-
-function loadState(): Track | null {
-	try {
-		if (!existsSync(STATE_FILE)) return null;
-		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as Track;
-	} catch {
-		return null;
-	}
-}
 
 type SearchCache = { query: string; results: Track[] };
 
@@ -139,27 +123,6 @@ async function searchYouTube(
 	return tracks;
 }
 
-function sendMpv(cmd: MpvCommandValue[]): Promise<unknown> {
-	return new Promise((resolve) => {
-		if (!existsSync(MPV_SOCK)) return resolve(null);
-		const sock = connect(MPV_SOCK);
-		let buf = "";
-		sock.on("data", (d) => {
-			buf += d.toString();
-			sock.end();
-		});
-		sock.on("end", () => {
-			try {
-				resolve(JSON.parse(buf.split("\n")[0] || "null"));
-			} catch {
-				resolve(null);
-			}
-		});
-		sock.on("error", () => resolve(null));
-		sock.write(`${JSON.stringify({ command: cmd })}\n`);
-	});
-}
-
 function App() {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<Track[]>([]);
@@ -168,65 +131,47 @@ function App() {
 	const [focus, setFocus] = useState<"search" | "results">("search");
 	const [now, setNow] = useState<Track | null>(null);
 	const [paused, setPaused] = useState(false);
-	const [mode, setMode] = useState<"audio" | "video">("audio");
+	const [mode, setMode] = useState<PlayMode>("audio");
 	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
-	const mpvRef = useRef<Subprocess | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
-
-	const stopMpv = async () => {
-		if (mpvRef.current) {
-			try {
-				mpvRef.current.kill();
-			} catch {}
-			mpvRef.current = null;
-		} else if (existsSync(MPV_SOCK)) {
-			await sendMpv(["quit"]);
-		}
-		if (existsSync(MPV_SOCK)) {
-			try {
-				unlinkSync(MPV_SOCK);
-			} catch {}
-		}
-		saveState(null);
-	};
 
 	const lastQueryRef = useRef("");
 
 	useEffect(() => {
-		const cached = loadState();
-		if (cached && existsSync(MPV_SOCK)) {
-			(async () => {
-				const resp = (await sendMpv(["get_property", "pause"])) as {
-					error?: string;
-					data?: boolean;
-				} | null;
-				if (resp && resp.error === "success") {
-					setNow(cached);
-					setPaused(Boolean(resp.data));
-				} else {
-					saveState(null);
-					try {
-						unlinkSync(MPV_SOCK);
-					} catch {}
-				}
-			})();
-		} else if (cached) {
-			saveState(null);
-		}
-		const cachedSearch = loadSearch();
-		if (cachedSearch && cachedSearch.results.length > 0) {
-			setResults(cachedSearch.results);
-			lastQueryRef.current = cachedSearch.query;
-			setFocus("results");
-			if (cached) {
-				const i = cachedSearch.results.findIndex((r) => r.id === cached.id);
-				if (i >= 0) setSelectedIndex(i);
+		(async () => {
+			const state = await getState();
+			if (state?.now) {
+				setNow(state.now);
+				setPaused(state.paused);
 			}
-		}
+			const cachedSearch = loadSearch();
+			if (cachedSearch && cachedSearch.results.length > 0) {
+				setResults(cachedSearch.results);
+				lastQueryRef.current = cachedSearch.query;
+				setFocus("results");
+				if (state?.now) {
+					const nowId = state.now.id;
+					const i = cachedSearch.results.findIndex((r) => r.id === nowId);
+					if (i >= 0) setSelectedIndex(i);
+				}
+			}
+		})();
+
+		const interval = setInterval(async () => {
+			const state = await getState();
+			if (!state) return;
+			setNow((cur) => {
+				if (cur?.id !== state.now?.id) return state.now;
+				return cur;
+			});
+			setPaused(state.paused);
+		}, 1000);
+
 		return () => {
 			abortRef.current?.abort();
+			clearInterval(interval);
 		};
 	}, []);
 
@@ -286,33 +231,13 @@ function App() {
 		}
 	};
 
-	const playTrack = async (t: Track, playMode: "audio" | "video" = mode) => {
-		await stopMpv();
+	const playTrack = async (t: Track, playMode: PlayMode = mode) => {
 		setNow(t);
 		setPaused(false);
 		setStatus("");
 		const i = results.findIndex((r) => r.id === t.id);
 		if (i >= 0) setSelectedIndex(i);
-		saveState(t);
-		const args = [
-			"mpv",
-			"--no-terminal",
-			`--input-ipc-server=${MPV_SOCK}`,
-			playMode === "audio"
-				? "--ytdl-format=bestaudio"
-				: "--ytdl-format=bestvideo*+bestaudio/best",
-			playMode === "audio" ? "--no-video" : "--force-window=yes",
-			t.url,
-		];
-		const proc = spawn(args, { stdout: "ignore", stderr: "ignore" });
-		mpvRef.current = proc;
-		proc.exited.then(() => {
-			if (mpvRef.current === proc) {
-				mpvRef.current = null;
-				setNow((cur) => (cur?.id === t.id ? null : cur));
-				saveState(null);
-			}
-		});
+		await playOnServer(t, playMode);
 	};
 
 	useKeyboard((key) => {
@@ -324,13 +249,14 @@ function App() {
 			(key.ctrl && key.name === "c") ||
 			(key.name === "q" && focus !== "search")
 		) {
-			mpvRef.current = null;
 			process.nextTick(() => shutdown(0));
 			return;
 		}
 		if (key.name === "space" && focus !== "search") {
-			sendMpv(["cycle", "pause"]);
-			setPaused((p) => !p);
+			(async () => {
+				const resp = await togglePause();
+				if (resp) setPaused(resp.paused);
+			})();
 			return;
 		}
 		if (key.name === "m" && focus !== "search") {
@@ -338,7 +264,7 @@ function App() {
 			return;
 		}
 		if (key.name === "s" && focus !== "search") {
-			stopMpv();
+			stopPlayback();
 			setNow(null);
 			setStatus("Stopped");
 			return;

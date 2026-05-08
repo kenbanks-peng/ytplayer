@@ -1,0 +1,73 @@
+import { existsSync } from "node:fs";
+import { connect } from "node:net";
+import { spawn } from "bun";
+import {
+	type PlayMode,
+	SERVER_SOCK,
+	type ServerState,
+	type Track,
+} from "./protocol";
+
+function send<T = unknown>(req: unknown, timeoutMs = 2000): Promise<T | null> {
+	return new Promise((resolve) => {
+		if (!existsSync(SERVER_SOCK)) return resolve(null);
+		const sock = connect(SERVER_SOCK);
+		let buf = "";
+		let done = false;
+		const finish = (v: T | null) => {
+			if (done) return;
+			done = true;
+			clearTimeout(timer);
+			try {
+				sock.end();
+			} catch {}
+			resolve(v);
+		};
+		const timer = setTimeout(() => finish(null), timeoutMs);
+		sock.on("data", (d) => {
+			buf += d.toString();
+			const idx = buf.indexOf("\n");
+			if (idx >= 0) {
+				try {
+					finish(JSON.parse(buf.slice(0, idx)) as T);
+				} catch {
+					finish(null);
+				}
+			}
+		});
+		sock.on("error", () => finish(null));
+		sock.write(`${JSON.stringify(req)}\n`);
+	});
+}
+
+export async function ensureServer(): Promise<void> {
+	if (existsSync(SERVER_SOCK)) {
+		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
+		if (resp?.ok) return;
+	}
+	const exe = process.argv[0];
+	if (!exe) throw new Error("cannot determine executable to spawn server");
+	const args = [
+		...process.argv.slice(1).filter((a) => a !== "server"),
+		"server",
+	];
+	spawn([exe, ...args], {
+		stdout: "ignore",
+		stderr: "ignore",
+		stdin: "ignore",
+	});
+	for (let i = 0; i < 50; i++) {
+		await new Promise((r) => setTimeout(r, 100));
+		if (!existsSync(SERVER_SOCK)) continue;
+		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
+		if (resp?.ok) return;
+	}
+	throw new Error("ytplayer server failed to start");
+}
+
+export const getState = () => send<ServerState>({ cmd: "state" });
+export const playTrack = (track: Track, mode: PlayMode) =>
+	send<{ ok: boolean }>({ cmd: "play", track, mode });
+export const stopPlayback = () => send<{ ok: boolean }>({ cmd: "stop" });
+export const togglePause = () =>
+	send<{ ok: boolean; paused: boolean }>({ cmd: "pause" });
