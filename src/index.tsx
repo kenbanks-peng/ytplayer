@@ -372,8 +372,9 @@ function App() {
 	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
 	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
+	const nowId = now?.id ?? null;
 	const options = results.map((t) => {
-		const marker = pageMarker(t.page);
+		const marker = t.id === nowId ? "▶" : pageMarker(t.page);
 		const title = fitCol(t.title, titleW);
 		const uploader = fitCol(t.uploader ?? "", uploaderW);
 		const views = fmtCount(t.views).padStart(viewsW, " ");
