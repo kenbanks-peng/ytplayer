@@ -30,6 +30,7 @@ import {
 } from "./client";
 import type { PlayMode, Track } from "./protocol";
 import { runServer } from "./server";
+import { theme } from "./theme";
 
 if (process.argv.includes("server")) {
 	await runServer();
@@ -584,7 +585,7 @@ function App() {
 				>
 					{options.length > 0 ? (
 						<>
-							<text fg="gray" attributes={2}>
+							<text fg={theme.textSubtle} attributes={2}>
 								{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
 							</text>
 							<select
@@ -602,7 +603,7 @@ function App() {
 						</>
 					) : (
 						<box padding={1}>
-							<text fg="gray">
+							<text fg={theme.textMuted}>
 								{error
 									? `Error: ${error}`
 									: searching
@@ -634,7 +635,7 @@ function App() {
 						/>
 					) : (
 						<box padding={1}>
-							<text fg="gray">Empty. Enter on a result to add.</text>
+							<text fg={theme.textMuted}>Empty. Enter on a result to add.</text>
 						</box>
 					)}
 				</box>
@@ -647,34 +648,37 @@ function App() {
 				padding={1}
 			>
 				<box flexDirection="row" justifyContent="flex-end">
-					<text fg="gray">
+					<text fg={theme.textMuted}>
 						{results.length > 0 ? `${results.length} results` : ""}
 					</text>
 				</box>
 				{now ? (
 					<>
 						<text>
-							<span fg={paused ? "yellow" : "green"}>
+							<span fg={paused ? theme.paused : theme.playing}>
 								{paused ? "❚❚" : "▶ "}
 							</span>{" "}
 							{now.title.normalize("NFKC")}
 							{now.uploader ? (
-								<span fg="gray"> — {now.uploader.normalize("NFKC")}</span>
+								<span fg={theme.textMuted}>
+									{" "}
+									— {now.uploader.normalize("NFKC")}
+								</span>
 							) : null}
-							<span fg="gray">
+							<span fg={theme.textMuted}>
 								{" "}
 								[{queueIndex + 1}/{queue.length}]
 							</span>
 						</text>
-						<text fg="gray" attributes={2}>
+						<text fg={theme.textSubtle} attributes={2}>
 							{now.url}
 						</text>
 					</>
 				) : (
-					<text fg="gray">Nothing playing</text>
+					<text fg={theme.textMuted}>Nothing playing</text>
 				)}
-				<text fg="gray">{status}</text>
-				<text fg="gray" attributes={2}>
+				<text fg={theme.textMuted}>{status}</text>
+				<text fg={theme.textSubtle} attributes={2}>
 					? for keys
 				</text>
 			</box>
@@ -687,25 +691,75 @@ function App() {
 					border
 					title=" Keys "
 					padding={1}
-					backgroundColor="black"
+					backgroundColor={theme.surfaceOverlay}
 					flexDirection="column"
 				>
-					<text>Tab cycle focus (search → results → playlist)</text>
-					<text>Enter results: add to queue • playlist: jump</text>
-					<text>p results: add (if needed) and play</text>
-					<text>d playlist: remove highlighted</text>
-					<text>[ / ] playlist: move highlighted up / down</text>
-					<text>x shuffle queue</text>
-					<text>&lt; / &gt; prev / next track</text>
-					<text>Space pause / resume</text>
-					<text>s stop</text>
-					<text>m toggle audio / video mode</text>
-					<text>r toggle repeat</text>
-					<text>n / PageDown load more results</text>
-					<text>c results: clear results • playlist: clear queue</text>
-					<text>q / Ctrl-C quit (server keeps running)</text>
+					<box flexDirection="row">
+						<box flexDirection="column" flexGrow={1}>
+							<text>
+								<span fg={theme.keyHint}>Tab </span>
+								<span fg={theme.textMuted}>cycle focus</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>Enter </span>
+								<span fg={theme.textMuted}>
+									add (results) / jump (playlist)
+								</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>p </span>
+								<span fg={theme.textMuted}>play selected result now</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>d </span>
+								<span fg={theme.textMuted}>remove from playlist</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>[ / ] </span>
+								<span fg={theme.textMuted}>move playlist item up/down</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>x </span>
+								<span fg={theme.textMuted}>shuffle queue</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>c </span>
+								<span fg={theme.textMuted}>clear results / clear queue</span>
+							</text>
+						</box>
+						<box flexDirection="column" flexGrow={1}>
+							<text>
+								<span fg={theme.keyHint}>Space </span>
+								<span fg={theme.textMuted}>pause / resume</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>&lt; / &gt; </span>
+								<span fg={theme.textMuted}>prev / next track</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>s </span>
+								<span fg={theme.textMuted}>stop</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>m </span>
+								<span fg={theme.textMuted}>audio / video mode</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>r </span>
+								<span fg={theme.textMuted}>toggle repeat</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>n / PgDn </span>
+								<span fg={theme.textMuted}>load more results</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>q / Ctrl-C </span>
+								<span fg={theme.textMuted}>quit (server stays)</span>
+							</text>
+						</box>
+					</box>
 					<text> </text>
-					<text fg="gray" attributes={2}>
+					<text fg={theme.textSubtle} attributes={2}>
 						? or Esc to close
 					</text>
 				</box>
