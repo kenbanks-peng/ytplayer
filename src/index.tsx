@@ -205,6 +205,7 @@ function App() {
 	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [playlistSelected, setPlaylistSelected] = useState(0);
+	const [showHelp, setShowHelp] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
 
@@ -362,6 +363,17 @@ function App() {
 	};
 
 	useKeyboard((key) => {
+		if (
+			(key.name === "?" || (key.shift && key.name === "/")) &&
+			focus !== "search"
+		) {
+			setShowHelp((s) => !s);
+			return;
+		}
+		if (key.name === "escape" && showHelp) {
+			setShowHelp(false);
+			return;
+		}
 		if (key.name === "tab") {
 			setFocus((f) =>
 				f === "search" ? "results" : f === "results" ? "playlist" : "search",
@@ -663,11 +675,41 @@ function App() {
 				)}
 				<text fg="gray">{status}</text>
 				<text fg="gray" attributes={2}>
-					Tab: focus • Enter: add • p: play • d: remove • [/]: move • x: shuffle
-					• &lt;/&gt;: prev/next • Space: pause • s: stop • m: mode • r: repeat
-					• n: more • c: clear • q: quit
+					? for keys
 				</text>
 			</box>
+			{showHelp ? (
+				<box
+					position="absolute"
+					top={6}
+					left={4}
+					right={4}
+					border
+					title=" Keys "
+					padding={1}
+					backgroundColor="black"
+					flexDirection="column"
+				>
+					<text>Tab cycle focus (search → results → playlist)</text>
+					<text>Enter results: add to queue • playlist: jump</text>
+					<text>p results: add (if needed) and play</text>
+					<text>d playlist: remove highlighted</text>
+					<text>[ / ] playlist: move highlighted up / down</text>
+					<text>x shuffle queue</text>
+					<text>&lt; / &gt; prev / next track</text>
+					<text>Space pause / resume</text>
+					<text>s stop</text>
+					<text>m toggle audio / video mode</text>
+					<text>r toggle repeat</text>
+					<text>n / PageDown load more results</text>
+					<text>c results: clear results • playlist: clear queue</text>
+					<text>q / Ctrl-C quit (server keeps running)</text>
+					<text> </text>
+					<text fg="gray" attributes={2}>
+						? or Esc to close
+					</text>
+				</box>
+			) : null}
 		</box>
 	);
 }
