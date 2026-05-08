@@ -198,7 +198,7 @@ export async function runServer(): Promise<void> {
 		const args = [
 			"mpv",
 			"--no-terminal",
-			"--idle=yes",
+			"--idle=once",
 			"--keep-open=no",
 			"--prefetch-playlist=yes",
 			"--gapless-audio=yes",

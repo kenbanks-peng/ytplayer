@@ -22,4 +22,4 @@ export const SERVER_SOCK = "/tmp/ytplayer.sock";
 
 // Bump this whenever the wire protocol changes incompatibly. ensureServer()
 // compares it against the running server's reply to detect stale daemons.
-export const PROTOCOL_VERSION = "3";
+export const PROTOCOL_VERSION = "4";
