@@ -119,11 +119,13 @@ async function searchYouTube(
 		if (!line.trim()) continue;
 		try {
 			const j = JSON.parse(line);
+			const title: string = j.title ?? "(untitled)";
+			const uploader: string | undefined = j.uploader || j.channel;
 			tracks.push({
 				id: j.id,
-				title: j.title ?? "(untitled)",
+				title: title.normalize("NFKC"),
 				url: j.url ?? `https://www.youtube.com/watch?v=${j.id}`,
-				uploader: j.uploader || j.channel,
+				uploader: uploader?.normalize("NFKC"),
 				duration: j.duration,
 				views: typeof j.view_count === "number" ? j.view_count : undefined,
 				page,
