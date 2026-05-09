@@ -18,15 +18,29 @@ const mocha = {
 	yellow: "#f9e2af",
 	red: "#f38ba8",
 	mauve: "#cba6f7",
+	pureGreen: "#00ff00",
 };
 
 const palette = mocha;
 
+function mix(a: string, b: string, t: number): string {
+	const ch = (i: number) => {
+		const av = parseInt(a.slice(i, i + 2), 16);
+		const bv = parseInt(b.slice(i, i + 2), 16);
+		return Math.round(av * t + bv * (1 - t))
+			.toString(16)
+			.padStart(2, "0");
+	};
+	return `#${ch(1)}${ch(3)}${ch(5)}`;
+}
+
 // Semantic tokens. UI code references these names, never raw colors.
 export const theme = {
-	surface: palette.base,
-	surfaceOverlay: palette.mantle,
-	border: palette.surface1,
+	bg: palette.base,
+	bgFocus: mix(palette.pureGreen, palette.base, 0.05),
+	bgRowSelected: mix(palette.pureGreen, palette.base, 0.2),
+	border: palette.subtext1,
+	borderFocus: palette.green,
 	text: palette.text,
 	textMuted: palette.subtext0,
 	textSubtle: palette.overlay0,

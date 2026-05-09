@@ -586,12 +586,13 @@ function App() {
 	const playlistW = inner - resultsW;
 
 	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
-	const topInner = Math.max(0, termWidth - 4);
+	const searchW = playlistW;
+	const topPanelInner = Math.max(0, termWidth - searchW - 6);
 	const leftLabel = " YouTube Player ";
-	const gap = Math.max(1, topInner - leftLabel.length - modeLabel.length - 4);
+	const gap = Math.max(1, topPanelInner - leftLabel.length - modeLabel.length - 4);
 	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
 
-	const progressW = Math.max(10, termWidth - 30);
+	const progressW = Math.max(10, topPanelInner - 14);
 	const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
 	const ratio =
 		totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
@@ -631,9 +632,10 @@ function App() {
 	});
 
 	return (
-		<box flexDirection="column" flexGrow={1} padding={1}>
-			<box flexDirection="column" border title={topTitle} padding={1}>
-				{now ? (
+		<box flexDirection="column" flexGrow={1} padding={1} backgroundColor={theme.bg}>
+			<box flexDirection="row">
+				<box flexGrow={1} flexBasis={resultsW} flexDirection="column" border borderColor={theme.border} title={topTitle} padding={1}>
+					{now ? (
 					<>
 						<text>
 							<span fg={paused ? theme.paused : theme.playing}>
@@ -661,9 +663,43 @@ function App() {
 					<text fg={theme.textMuted}>Nothing playing</text>
 				)}
 				<text fg={theme.textMuted}>{status}</text>
-				<text fg={theme.textSubtle} attributes={2}>
-					{now ? "y to open in browser" : "? for keys"}
-				</text>
+				{now ? null : (
+					<text fg={theme.textSubtle} attributes={2}>
+						? for keys
+					</text>
+				)}
+				</box>
+				<box
+					flexBasis={searchW}
+					flexDirection="row"
+					border
+					borderColor={focus === "search" ? theme.borderFocus : theme.border}
+					backgroundColor={focus === "search" ? theme.bgFocus : undefined}
+					title=" Search "
+					padding={1}
+					alignItems="center"
+					onMouseDown={() => setFocus("search")}
+				>
+					<input
+						ref={inputRef}
+						value={query}
+						onInput={setQuery}
+						onSubmit={(value) => {
+							const v = typeof value === "string" ? value : query;
+							setQuery(v);
+							const q = v.trim();
+							if (!q) return;
+							setFocus("results");
+							if (q === lastQueryRef.current) {
+								loadMore();
+							} else {
+								doSearch(v);
+							}
+						}}
+						placeholder="artist, song, album..."
+						flexGrow={1}
+					/>
+				</box>
 			</box>
 
 			<box flexDirection="row" flexGrow={1}>
@@ -672,10 +708,8 @@ function App() {
 					flexBasis={resultsW}
 					flexDirection="column"
 					border
-					borderColor={focus === "results" ? theme.accent : theme.border}
-					backgroundColor={
-						focus === "results" ? theme.surfaceOverlay : theme.surface
-					}
+					borderColor={focus === "results" ? theme.borderFocus : theme.border}
+					backgroundColor={focus === "results" ? theme.bgFocus : undefined}
 					title={` Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `}
 					onMouseDown={() => setFocus("results")}
 				>
@@ -687,6 +721,9 @@ function App() {
 							<select
 								ref={resultsSelectRef}
 								options={options}
+								backgroundColor="transparent"
+								focusedBackgroundColor="transparent"
+								selectedBackgroundColor={theme.bgRowSelected}
 								showDescription={false}
 								selectedIndex={selectedIndex}
 								onChange={(i: number) => setSelectedIndex(i)}
@@ -730,10 +767,8 @@ function App() {
 					flexBasis={playlistW}
 					flexDirection="column"
 					border
-					borderColor={focus === "playlist" ? theme.accent : theme.border}
-					backgroundColor={
-						focus === "playlist" ? theme.surfaceOverlay : theme.surface
-					}
+					borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
+					backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
 					title={` Playlist (${queue.length}) `}
 					onMouseDown={() => setFocus("playlist")}
 				>
@@ -741,6 +776,9 @@ function App() {
 						<select
 							ref={playlistSelectRef}
 							options={playlistOptions}
+							backgroundColor="transparent"
+							focusedBackgroundColor="transparent"
+							selectedBackgroundColor={theme.bgRowSelected}
 							showDescription={false}
 							selectedIndex={Math.min(
 								playlistSelected,
@@ -758,39 +796,6 @@ function App() {
 				</box>
 			</box>
 
-			<box
-				flexDirection="row"
-				border
-				borderColor={focus === "search" ? theme.accent : theme.border}
-				backgroundColor={
-					focus === "search" ? theme.surfaceOverlay : theme.surface
-				}
-				title=" YouTube Player "
-				padding={1}
-				alignItems="center"
-				onMouseDown={() => setFocus("search")}
-			>
-				<text>Search: </text>
-				<input
-					ref={inputRef}
-					value={query}
-					onInput={setQuery}
-					onSubmit={(value) => {
-						const v = typeof value === "string" ? value : query;
-						setQuery(v);
-						const q = v.trim();
-						if (!q) return;
-						setFocus("results");
-						if (q === lastQueryRef.current) {
-							loadMore();
-						} else {
-							doSearch(v);
-						}
-					}}
-					placeholder="artist, song, album..."
-					flexGrow={1}
-				/>
-			</box>
 			{showHelp ? (
 				<box
 					position="absolute"
@@ -800,7 +805,6 @@ function App() {
 					border
 					title=" Keys "
 					padding={1}
-					backgroundColor={theme.surfaceOverlay}
 					flexDirection="column"
 				>
 					<box flexDirection="row">
@@ -830,6 +834,10 @@ function App() {
 							<text>
 								<span fg={theme.keyHint}>x </span>
 								<span fg={theme.textMuted}>shuffle queue</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>y </span>
+								<span fg={theme.textMuted}>open in browser</span>
 							</text>
 							<text>
 								<span fg={theme.keyHint}>c </span>
