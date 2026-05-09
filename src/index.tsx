@@ -154,6 +154,22 @@ function fitCol(s: string, width: number): string {
   return acc;
 }
 
+function clip(s: string, width: number): string {
+  if (width <= 0) return "";
+  if (displayWidth(s) <= width) return s;
+  const reserve = width <= 1 ? 0 : 1;
+  let acc = "";
+  let aw = 0;
+  for (const ch of s) {
+    const cw = charWidth(ch.codePointAt(0) ?? 0);
+    if (aw + cw > width - reserve) break;
+    acc += ch;
+    aw += cw;
+  }
+  if (reserve) acc += "…";
+  return acc;
+}
+
 const PAGE_SIZE = 20;
 
 async function searchYouTube(
@@ -664,12 +680,33 @@ function App() {
   );
   const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
 
-  const progressW = Math.max(10, topPanelInner - 14);
+  const queueLabel = now ? ` [${queueIndex + 1}/${queue.length}]` : "";
+  const progressW = Math.max(10, topPanelInner - 14 - queueLabel.length);
   const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
   const ratio =
     totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
   const filled = Math.round(progressW * ratio);
   const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
+
+  const titleLineW = Math.max(10, topPanelInner - 3);
+  let nowTitleStr = "";
+  let nowUploaderStr = "";
+  if (now) {
+    const fullTitle = now.title.normalize("NFKC");
+    const fullUploader = now.uploader ? now.uploader.normalize("NFKC") : "";
+    if (fullUploader) {
+      const desiredUpW = Math.min(displayWidth(fullUploader), 24);
+      const titleBudget = titleLineW - 3 - desiredUpW;
+      if (titleBudget >= 10) {
+        nowTitleStr = clip(fullTitle, titleBudget);
+        nowUploaderStr = clip(fullUploader, desiredUpW);
+      } else {
+        nowTitleStr = clip(fullTitle, titleLineW);
+      }
+    } else {
+      nowTitleStr = clip(fullTitle, titleLineW);
+    }
+  }
 
   const durW = 7;
   const viewsW = 7;
@@ -704,22 +741,19 @@ function App() {
                 <span fg={paused ? theme.paused : theme.playing}>
                   {paused ? "❚❚" : "▶ "}
                 </span>{" "}
-                {now.title.normalize("NFKC")}
-                {now.uploader ? (
+                {nowTitleStr}
+                {nowUploaderStr ? (
                   <span fg={theme.textMuted}>
                     {" "}
-                    — {now.uploader.normalize("NFKC")}
+                    — {nowUploaderStr}
                   </span>
                 ) : null}
-                <span fg={theme.textMuted}>
-                  {" "}
-                  [{queueIndex + 1}/{queue.length}]
-                </span>
               </text>
               <text>
                 <span fg={theme.textMuted}>{fmtDur(position)} </span>
                 <span fg={theme.accent}>{progressBar}</span>
                 <span fg={theme.textMuted}> {fmtDur(totalSec)}</span>
+                <span fg={theme.textMuted}>{queueLabel}</span>
               </text>
             </>
           ) : (
