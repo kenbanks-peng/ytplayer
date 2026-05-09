@@ -519,6 +519,12 @@ function App() {
 	const resultsW = Math.floor(inner * 0.6);
 	const playlistW = inner - resultsW;
 
+	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
+	const topInner = Math.max(0, termWidth - 4);
+	const leftLabel = " YouTube Player ";
+	const gap = Math.max(1, topInner - leftLabel.length - modeLabel.length - 4);
+	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
+
 	const durW = 7;
 	const viewsW = 7;
 	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
@@ -553,12 +559,7 @@ function App() {
 
 	return (
 		<box flexDirection="column" flexGrow={1} padding={1}>
-			<box
-				flexDirection="column"
-				border
-				title={` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `}
-				padding={1}
-			>
+			<box flexDirection="column" border title={topTitle} padding={1}>
 				<box flexDirection="row" justifyContent="flex-end">
 					<text fg={theme.textMuted}>
 						{results.length > 0 ? `${results.length} results` : ""}
