@@ -27,6 +27,7 @@ import {
 	queuePreview,
 	queueRemove,
 	queueShuffle,
+	seekRelative,
 	setMode as setModeOnServer,
 	setRepeat,
 	stopPlayback,
@@ -208,6 +209,8 @@ function App() {
 	const [paused, setPaused] = useState(false);
 	const [repeat, setRepeatState] = useState(false);
 	const [mode, setMode] = useState<PlayMode>("audio");
+	const [position, setPosition] = useState(0);
+	const [trackDuration, setTrackDuration] = useState(0);
 	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [playlistSelected, setPlaylistSelected] = useState(0);
@@ -246,6 +249,10 @@ function App() {
 				setPreview(state.preview ?? null);
 				setPaused(Boolean(state.paused));
 				setRepeatState(Boolean(state.repeat));
+				setPosition(typeof state.position === "number" ? state.position : 0);
+				setTrackDuration(
+					typeof state.duration === "number" ? state.duration : 0,
+				);
 				if (state.mode === "audio" || state.mode === "video")
 					setMode(state.mode);
 			}
@@ -277,6 +284,8 @@ function App() {
 			setPreview(state.preview ?? null);
 			setPaused(Boolean(state.paused));
 			setRepeatState(Boolean(state.repeat));
+			setPosition(typeof state.position === "number" ? state.position : 0);
+			setTrackDuration(typeof state.duration === "number" ? state.duration : 0);
 			if (state.mode === "audio" || state.mode === "video") setMode(state.mode);
 		}, 1000);
 
@@ -456,6 +465,16 @@ function App() {
 			nextTrack();
 			return;
 		}
+		if (key.name === "right" && focus !== "search") {
+			seekRelative(10);
+			setPosition((p) => Math.min(trackDuration || p + 10, p + 10));
+			return;
+		}
+		if (key.name === "left" && focus !== "search") {
+			seekRelative(-10);
+			setPosition((p) => Math.max(0, p - 10));
+			return;
+		}
 		if (
 			(key.name === "<" || (key.shift && key.name === "comma")) &&
 			focus !== "search"
@@ -572,6 +591,13 @@ function App() {
 	const gap = Math.max(1, topInner - leftLabel.length - modeLabel.length - 4);
 	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
 
+	const progressW = Math.max(10, termWidth - 30);
+	const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
+	const ratio =
+		totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
+	const filled = Math.round(progressW * ratio);
+	const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
+
 	const durW = 7;
 	const viewsW = 7;
 	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
@@ -608,22 +634,29 @@ function App() {
 		<box flexDirection="column" flexGrow={1} padding={1}>
 			<box flexDirection="column" border title={topTitle} padding={1}>
 				{now ? (
-					<text>
-						<span fg={paused ? theme.paused : theme.playing}>
-							{paused ? "❚❚" : "▶ "}
-						</span>{" "}
-						{now.title.normalize("NFKC")}
-						{now.uploader ? (
+					<>
+						<text>
+							<span fg={paused ? theme.paused : theme.playing}>
+								{paused ? "❚❚" : "▶ "}
+							</span>{" "}
+							{now.title.normalize("NFKC")}
+							{now.uploader ? (
+								<span fg={theme.textMuted}>
+									{" "}
+									— {now.uploader.normalize("NFKC")}
+								</span>
+							) : null}
 							<span fg={theme.textMuted}>
 								{" "}
-								— {now.uploader.normalize("NFKC")}
+								[{queueIndex + 1}/{queue.length}]
 							</span>
-						) : null}
-						<span fg={theme.textMuted}>
-							{" "}
-							[{queueIndex + 1}/{queue.length}]
-						</span>
-					</text>
+						</text>
+						<text>
+							<span fg={theme.textMuted}>{fmtDur(position)} </span>
+							<span fg={theme.accent}>{progressBar}</span>
+							<span fg={theme.textMuted}> {fmtDur(totalSec)}</span>
+						</text>
+					</>
 				) : (
 					<text fg={theme.textMuted}>Nothing playing</text>
 				)}
@@ -811,6 +844,10 @@ function App() {
 							<text>
 								<span fg={theme.keyHint}>&lt; / &gt; </span>
 								<span fg={theme.textMuted}>prev / next track</span>
+							</text>
+							<text>
+								<span fg={theme.keyHint}>← / → </span>
+								<span fg={theme.textMuted}>seek -10s / +10s</span>
 							</text>
 							<text>
 								<span fg={theme.keyHint}>s </span>

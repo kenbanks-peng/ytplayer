@@ -104,3 +104,5 @@ export const setRepeat = (on: boolean) =>
 	send<{ ok: boolean; repeat: boolean }>({ cmd: "repeat", on });
 export const setMode = (mode: PlayMode) =>
 	send<{ ok: boolean; mode: PlayMode }>({ cmd: "mode", mode });
+export const seekRelative = (seconds: number) =>
+	send<{ ok: boolean }>({ cmd: "seek", seconds });

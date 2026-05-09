@@ -74,6 +74,7 @@ type Request =
 	| { cmd: "pause" }
 	| { cmd: "repeat"; on: boolean }
 	| { cmd: "mode"; mode: PlayMode }
+	| { cmd: "seek"; seconds: number; absolute?: boolean }
 	| { cmd: "shutdown" };
 
 export async function runServer(): Promise<void> {
@@ -88,6 +89,8 @@ export async function runServer(): Promise<void> {
 	// Track currently playing as a one-off preview (not part of `queue`).
 	// While set, mpv's playlist contains only this track.
 	let preview: Track | null = null;
+	let position = 0;
+	let duration = 0;
 	// Set to true right before we issue an intentional mpv shutdown (quit/kill).
 	// Lets the proc.exited handler distinguish "we asked it to die" from "user
 	// closed the window" — only the latter should forget the playback position.
@@ -145,10 +148,16 @@ export async function runServer(): Promise<void> {
 				const v = typeof msg.data === "number" ? msg.data : -1;
 				if (v !== index) {
 					index = v;
+					position = 0;
+					duration = 0;
 					persist();
 				}
 			} else if (msg.name === "pause") {
 				paused = Boolean(msg.data);
+			} else if (msg.name === "time-pos") {
+				position = typeof msg.data === "number" ? msg.data : 0;
+			} else if (msg.name === "duration") {
+				duration = typeof msg.data === "number" ? msg.data : 0;
 			}
 		}
 	};
@@ -198,6 +207,8 @@ export async function runServer(): Promise<void> {
 		mpvReady = true;
 		await mpvCmd(["observe_property", 1, "playlist-pos"]);
 		await mpvCmd(["observe_property", 2, "pause"]);
+		await mpvCmd(["observe_property", 3, "time-pos"]);
+		await mpvCmd(["observe_property", 4, "duration"]);
 		await mpvCmd(["set_property", "loop-playlist", repeat ? "inf" : "no"]);
 		return true;
 	};
@@ -252,6 +263,8 @@ export async function runServer(): Promise<void> {
 				// Preview is single-shot: once mpv exits, the preview is over.
 				preview = null;
 				paused = false;
+				position = 0;
+				duration = 0;
 				persist();
 			}
 		});
@@ -347,7 +360,16 @@ export async function runServer(): Promise<void> {
 			case "ping":
 				return { ok: true, version: binaryVersion() };
 			case "state":
-				return { queue, index, paused, repeat, mode, preview };
+				return {
+					queue,
+					index,
+					paused,
+					repeat,
+					mode,
+					preview,
+					position,
+					duration,
+				};
 			case "queue:add": {
 				if (!req.track) return { ok: false, error: "missing track" };
 				const modeChanged = req.mode && req.mode !== mode;
@@ -636,6 +658,14 @@ export async function runServer(): Promise<void> {
 					}
 				}
 				return { ok: true, mode };
+			}
+			case "seek": {
+				if (!mpvReady) return { ok: true };
+				const args: MpvVal[] = req.absolute
+					? ["seek", req.seconds, "absolute"]
+					: ["seek", req.seconds, "relative"];
+				await mpvCmd(args);
+				return { ok: true };
 			}
 			case "shutdown": {
 				await killMpv();
