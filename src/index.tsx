@@ -670,7 +670,7 @@ function App() {
   const resultsW = Math.floor(inner * 0.6);
   const playlistW = inner - resultsW;
 
-  const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
+  const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} • ? `;
   const searchW = playlistW;
   const topPanelInner = Math.max(0, termWidth - searchW - 6);
   const leftLabel = " YouTube Player ";
