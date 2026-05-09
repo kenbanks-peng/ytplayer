@@ -380,8 +380,18 @@ function App() {
 
 	const removeFromQueue = async (id: string) => {
 		await queueRemove(id);
-		// Optimistic local update — server poll will reconcile.
-		setQueue((cur) => cur.filter((t) => t.id !== id));
+		setQueue((cur) => {
+			const i = cur.findIndex((t) => t.id === id);
+			if (i < 0) return cur;
+			const next = cur.filter((t) => t.id !== id);
+			setQueueIndex((idx) => {
+				if (idx < 0) return idx;
+				if (i < idx) return idx - 1;
+				if (i === idx && idx >= next.length) return next.length - 1;
+				return idx;
+			});
+			return next;
+		});
 	};
 
 	useKeyboard((key) => {
@@ -469,6 +479,16 @@ function App() {
 		}
 		if (key.name === "x" && focus !== "search") {
 			queueShuffle();
+			return;
+		}
+		if (key.name === "y" && focus !== "search") {
+			const t =
+				focus === "results"
+					? results[selectedIndex]
+					: focus === "playlist"
+						? queue[playlistSelected]
+						: now;
+			if (t) spawn(["open", t.url], { stdout: "ignore", stderr: "ignore" });
 			return;
 		}
 		if (key.name === "p" && focus === "results") {
@@ -592,33 +612,28 @@ function App() {
 		<box flexDirection="column" flexGrow={1} padding={1}>
 			<box flexDirection="column" border title={topTitle} padding={1}>
 				{now ? (
-					<>
-						<text>
-							<span fg={paused ? theme.paused : theme.playing}>
-								{paused ? "❚❚" : "▶ "}
-							</span>{" "}
-							{now.title.normalize("NFKC")}
-							{now.uploader ? (
-								<span fg={theme.textMuted}>
-									{" "}
-									— {now.uploader.normalize("NFKC")}
-								</span>
-							) : null}
+					<text>
+						<span fg={paused ? theme.paused : theme.playing}>
+							{paused ? "❚❚" : "▶ "}
+						</span>{" "}
+						{now.title.normalize("NFKC")}
+						{now.uploader ? (
 							<span fg={theme.textMuted}>
 								{" "}
-								[{queueIndex + 1}/{queue.length}]
+								— {now.uploader.normalize("NFKC")}
 							</span>
-						</text>
-						<text fg={theme.textSubtle} attributes={2}>
-							{now.url}
-						</text>
-					</>
+						) : null}
+						<span fg={theme.textMuted}>
+							{" "}
+							[{queueIndex + 1}/{queue.length}]
+						</span>
+					</text>
 				) : (
 					<text fg={theme.textMuted}>Nothing playing</text>
 				)}
 				<text fg={theme.textMuted}>{status}</text>
 				<text fg={theme.textSubtle} attributes={2}>
-					? for keys
+					{now ? "y to open in browser" : "? for keys"}
 				</text>
 			</box>
 
