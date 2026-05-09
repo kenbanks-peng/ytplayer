@@ -66,6 +66,31 @@ function fmtCount(n?: number): string {
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const SEARCH_FILE = join(CACHE_DIR, "search.json");
 const PLAYLIST_DIR = join(CACHE_DIR, "playlists");
+const ACTIVE_FILE = join(CACHE_DIR, "active.json");
+
+type ActiveAssoc = { name: string; trackIds: string[] };
+
+function saveActiveAssoc(assoc: ActiveAssoc | null) {
+	try {
+		mkdirSync(CACHE_DIR, { recursive: true });
+		if (assoc) {
+			writeFileSync(ACTIVE_FILE, JSON.stringify(assoc));
+		} else if (existsSync(ACTIVE_FILE)) {
+			unlinkSync(ACTIVE_FILE);
+		}
+	} catch {}
+}
+
+function loadActiveAssoc(): ActiveAssoc | null {
+	try {
+		if (!existsSync(ACTIVE_FILE)) return null;
+		const j = JSON.parse(readFileSync(ACTIVE_FILE, "utf8")) as ActiveAssoc;
+		if (typeof j.name !== "string" || !Array.isArray(j.trackIds)) return null;
+		return j;
+	} catch {
+		return null;
+	}
+}
 
 type SearchCache = { query: string; results: Track[] };
 
@@ -400,6 +425,18 @@ function App() {
 				);
 				if (state.mode === "audio" || state.mode === "video")
 					setMode(state.mode);
+				const assoc = loadActiveAssoc();
+				if (assoc) {
+					if (q.length === 0) {
+						saveActiveAssoc(null);
+					} else {
+						setPlaylistName(assoc.name);
+						const same =
+							q.length === assoc.trackIds.length &&
+							q.every((t, i) => t.id === assoc.trackIds[i]);
+						setPlaylistDirty(!same);
+					}
+				}
 			}
 			const cachedSearch = loadSearch();
 			if (cachedSearch && cachedSearch.results.length > 0) {
@@ -573,6 +610,7 @@ function App() {
 		}
 		setPlaylistName(name);
 		setPlaylistDirty(false);
+		saveActiveAssoc({ name, trackIds: queue.map((t) => t.id) });
 		setStatus(`Saved playlist: ${name}`);
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
@@ -593,6 +631,10 @@ function App() {
 		if (sameTracks) {
 			setPlaylistName(data.name);
 			setPlaylistDirty(false);
+			saveActiveAssoc({
+				name: data.name,
+				trackIds: data.tracks.map((t) => t.id),
+			});
 			setStatus(`Already loaded: ${data.name}`);
 			closePlaylistModal();
 			return;
@@ -606,6 +648,10 @@ function App() {
 		setPlaylistSelected(0);
 		setPlaylistName(data.name);
 		setPlaylistDirty(false);
+		saveActiveAssoc({
+			name: data.name,
+			trackIds: data.tracks.map((t) => t.id),
+		});
 		setStatus(`Loaded: ${data.name} (${data.tracks.length})`);
 		closePlaylistModal();
 	};
@@ -625,6 +671,7 @@ function App() {
 		if (playlistName === entry.name) {
 			setPlaylistName(null);
 			setPlaylistDirty(queue.length > 0);
+			saveActiveAssoc(null);
 		}
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
@@ -841,6 +888,7 @@ function App() {
 			setPlaylistSelected(0);
 			setPlaylistName(null);
 			setPlaylistDirty(false);
+			saveActiveAssoc(null);
 			return;
 		}
 		if (
