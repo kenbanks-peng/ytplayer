@@ -230,24 +230,25 @@ function scrollCursorIntoView(
 }
 
 const HELP_LEFT: [string, string][] = [
-	["Tab", "cycle focus"],
-	["Enter", "add (results) / jump (playlist)"],
+	["Tab", "toggle focus"],
+	["Enter", "add to playlist"],
 	["i", "instant play"],
-	["d", "remove from playlist"],
+	["g", "go play playlist"],
+	["d", "delete from playlist"],
 	["[ / ]", "move playlist item up/down"],
 	["x", "shuffle queue"],
-	["y", "open in browser"],
+	["y", "yank to browser"],
 	["c", "clear results / clear queue"],
 ];
 const HELP_RIGHT: [string, string][] = [
 	["Space", "pause / resume"],
-	["< / >", "prev / next track"],
+	["p / n", "prev / next track"],
 	["← / →", "seek -10s / +10s"],
 	["s", "stop"],
-	["m", "audio / video mode"],
-	["r", "toggle repeat"],
-	["n / PgDn", "load more results"],
-	["q / Ctrl-C", "quit (server stays)"],
+	["m", "mode: audio / video"],
+	["r", "repeat toggle"],
+	["f", "fetch more results"],
+	["q / Ctrl-C", "quit"],
 ];
 const HELP_LEFT_KEY_W =
 	Math.max(...HELP_LEFT.map(([k]) => displayWidth(k))) + 2;
@@ -539,7 +540,7 @@ function App() {
 			setPaused(false);
 			return;
 		}
-		if ((key.name === "n" || key.name === "pagedown") && focus !== "search") {
+		if (key.name === "f" && focus !== "search") {
 			const q = query.trim();
 			if (q && q !== lastQueryRef.current) {
 				doSearch(q);
@@ -548,10 +549,7 @@ function App() {
 			}
 			return;
 		}
-		if (
-			(key.name === ">" || (key.shift && key.name === "period")) &&
-			focus !== "search"
-		) {
+		if (key.name === "n" && focus !== "search") {
 			nextTrack();
 			return;
 		}
@@ -565,10 +563,7 @@ function App() {
 			setPosition((p) => Math.max(0, p - 10));
 			return;
 		}
-		if (
-			(key.name === "<" || (key.shift && key.name === "comma")) &&
-			focus !== "search"
-		) {
+		if (key.name === "p" && focus !== "search") {
 			prevTrack();
 			return;
 		}
@@ -599,6 +594,11 @@ function App() {
 		if (key.name === "i" && focus === "results") {
 			const t = results[selectedIndex];
 			if (t) previewFromResults(t);
+			return;
+		}
+		if (key.name === "g" && focus !== "search" && queue.length > 0) {
+			const i = focus === "playlist" ? playlistSelected : 0;
+			jumpInQueue(i);
 			return;
 		}
 		if (key.name === "c" && focus === "playlist") {
