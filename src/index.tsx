@@ -471,18 +471,24 @@ function App() {
 			setShowHelp(false);
 			return;
 		}
-		if (key.name === "tab") {
+		if (key.name === "tab" || (key.name === "l" && focus !== "search")) {
 			setFocus((f) =>
 				f === "search" ? "results" : f === "results" ? "playlist" : "search",
 			);
 			return;
 		}
+		if (key.name === "h" && focus !== "search") {
+			setFocus((f) =>
+				f === "search" ? "playlist" : f === "playlist" ? "results" : "search",
+			);
+			return;
+		}
 		if (focus === "playlist" && queue.length > 0) {
-			if (key.name === "up") {
+			if (key.name === "up" || key.name === "k") {
 				setPlaylistSelected((c) => Math.max(0, c - 1));
 				return;
 			}
-			if (key.name === "down") {
+			if (key.name === "down" || key.name === "j") {
 				setPlaylistSelected((c) => Math.min(queue.length - 1, c + 1));
 				return;
 			}
@@ -492,11 +498,11 @@ function App() {
 			}
 		}
 		if (focus === "results" && results.length > 0) {
-			if (key.name === "up") {
+			if (key.name === "up" || key.name === "k") {
 				setSelectedIndex((c) => Math.max(0, c - 1));
 				return;
 			}
-			if (key.name === "down") {
+			if (key.name === "down" || key.name === "j") {
 				setSelectedIndex((c) => Math.min(results.length - 1, c + 1));
 				return;
 			}
