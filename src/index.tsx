@@ -7,7 +7,11 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createCliRenderer } from "@opentui/core";
+import {
+	createCliRenderer,
+	type InputRenderable,
+	type SelectRenderable,
+} from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { spawn } from "bun";
 import { useEffect, useRef, useState } from "react";
@@ -208,7 +212,24 @@ function App() {
 	const [playlistSelected, setPlaylistSelected] = useState(0);
 	const [showHelp, setShowHelp] = useState(false);
 	const abortRef = useRef<AbortController | null>(null);
+	const inputRef = useRef<InputRenderable | null>(null);
+	const resultsSelectRef = useRef<SelectRenderable | null>(null);
+	const playlistSelectRef = useRef<SelectRenderable | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: re-run when select mounts/unmounts
+	useEffect(() => {
+		const target =
+			focus === "search"
+				? inputRef.current
+				: focus === "results"
+					? resultsSelectRef.current
+					: playlistSelectRef.current;
+		if (focus !== "search") inputRef.current?.blur();
+		if (focus !== "results") resultsSelectRef.current?.blur();
+		if (focus !== "playlist") playlistSelectRef.current?.blur();
+		target?.focus();
+	}, [focus, results.length, queue.length]);
 
 	const lastQueryRef = useRef("");
 	const now = queueIndex >= 0 ? (queue[queueIndex] ?? null) : null;
@@ -619,8 +640,8 @@ function App() {
 								{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
 							</text>
 							<select
+								ref={resultsSelectRef}
 								options={options}
-								focused={focus === "results"}
 								showDescription={false}
 								selectedIndex={selectedIndex}
 								onChange={(i: number) => setSelectedIndex(i)}
@@ -656,8 +677,8 @@ function App() {
 				>
 					{playlistOptions.length > 0 ? (
 						<select
+							ref={playlistSelectRef}
 							options={playlistOptions}
-							focused={focus === "playlist"}
 							showDescription={false}
 							selectedIndex={Math.min(
 								playlistSelected,
@@ -688,20 +709,22 @@ function App() {
 			>
 				<text>Search: </text>
 				<input
+					ref={inputRef}
 					value={query}
 					onInput={setQuery}
 					onSubmit={(value) => {
 						const v = typeof value === "string" ? value : query;
 						setQuery(v);
 						const q = v.trim();
-						if (q && q === lastQueryRef.current) {
+						if (!q) return;
+						setFocus("results");
+						if (q === lastQueryRef.current) {
 							loadMore();
 						} else {
 							doSearch(v);
 						}
 					}}
 					placeholder="artist, song, album..."
-					focused={focus === "search"}
 					flexGrow={1}
 				/>
 			</box>
