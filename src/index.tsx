@@ -1,6 +1,7 @@
 import {
 	existsSync,
 	mkdirSync,
+	readdirSync,
 	readFileSync,
 	unlinkSync,
 	writeFileSync,
@@ -26,6 +27,7 @@ import {
 	queueMove,
 	queuePreview,
 	queueRemove,
+	queueSet,
 	queueShuffle,
 	seekAbsolute,
 	seekRelative,
@@ -63,8 +65,79 @@ function fmtCount(n?: number): string {
 
 const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 const SEARCH_FILE = join(CACHE_DIR, "search.json");
+const PLAYLIST_DIR = join(CACHE_DIR, "playlists");
 
 type SearchCache = { query: string; results: Track[] };
+
+type PlaylistEntry = { name: string; slug: string; count: number };
+
+function slugify(name: string): string {
+	const s = name
+		.normalize("NFKC")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return s || "untitled";
+}
+
+function listPlaylists(): PlaylistEntry[] {
+	try {
+		if (!existsSync(PLAYLIST_DIR)) return [];
+		const files = readdirSync(PLAYLIST_DIR).filter((f) => f.endsWith(".json"));
+		const entries: PlaylistEntry[] = [];
+		for (const file of files) {
+			try {
+				const raw = readFileSync(join(PLAYLIST_DIR, file), "utf8");
+				const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
+				const name = typeof j.name === "string" ? j.name : file.slice(0, -5);
+				const tracks = Array.isArray(j.tracks) ? j.tracks : [];
+				entries.push({ name, slug: file.slice(0, -5), count: tracks.length });
+			} catch {}
+		}
+		entries.sort((a, b) => a.name.localeCompare(b.name));
+		return entries;
+	} catch {
+		return [];
+	}
+}
+
+function savePlaylist(name: string, tracks: Track[]): string | null {
+	const trimmed = name.trim();
+	if (!trimmed) return null;
+	try {
+		mkdirSync(PLAYLIST_DIR, { recursive: true });
+		const slug = slugify(trimmed);
+		writeFileSync(
+			join(PLAYLIST_DIR, `${slug}.json`),
+			JSON.stringify({ name: trimmed, tracks }),
+		);
+		return slug;
+	} catch {
+		return null;
+	}
+}
+
+function loadPlaylist(slug: string): { name: string; tracks: Track[] } | null {
+	try {
+		const raw = readFileSync(join(PLAYLIST_DIR, `${slug}.json`), "utf8");
+		const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
+		const tracks = Array.isArray(j.tracks) ? j.tracks : [];
+		const name = typeof j.name === "string" ? j.name : slug;
+		return { name, tracks };
+	} catch {
+		return null;
+	}
+}
+
+function deletePlaylist(slug: string): boolean {
+	try {
+		const path = join(PLAYLIST_DIR, `${slug}.json`);
+		if (existsSync(path)) unlinkSync(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 function saveSearch(cache: SearchCache | null) {
 	try {
@@ -240,6 +313,7 @@ const HELP_LEFT: [string, string][] = [
 	["x", "shuffle queue"],
 	["y", "yank to browser"],
 	["c", "clear results / clear queue"],
+	["P", "playlists: save / load / delete"],
 ];
 const HELP_RIGHT: [string, string][] = [
 	["Space", "pause / resume"],
@@ -275,8 +349,19 @@ function App() {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [playlistSelected, setPlaylistSelected] = useState(0);
 	const [showHelp, setShowHelp] = useState(false);
+	const [playlistName, setPlaylistName] = useState<string | null>(null);
+	const [playlistDirty, setPlaylistDirty] = useState(false);
+	const [showPlaylists, setShowPlaylists] = useState(false);
+	const [plEntries, setPlEntries] = useState<PlaylistEntry[]>([]);
+	const [plModalFocus, setPlModalFocus] = useState<"input" | "list">("list");
+	const [plName, setPlName] = useState("");
+	const [plSelected, setPlSelected] = useState(0);
+	const [plDeleteArmedSlug, setPlDeleteArmedSlug] = useState<string | null>(
+		null,
+	);
 	const abortRef = useRef<AbortController | null>(null);
 	const inputRef = useRef<InputRenderable | null>(null);
+	const plInputRef = useRef<InputRenderable | null>(null);
 	const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const playlistScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const { width: termWidth } = useTerminalDimensions();
@@ -285,6 +370,14 @@ function App() {
 		if (focus === "search") inputRef.current?.focus();
 		else inputRef.current?.blur();
 	}, [focus]);
+
+	useEffect(() => {
+		if (showPlaylists && plModalFocus === "input") {
+			plInputRef.current?.focus();
+		} else {
+			plInputRef.current?.blur();
+		}
+	}, [showPlaylists, plModalFocus]);
 
 	const lastQueryRef = useRef("");
 	const now = preview ?? (queueIndex >= 0 ? (queue[queueIndex] ?? null) : null);
@@ -425,7 +518,11 @@ function App() {
 
 	const addToQueue = async (t: Track) => {
 		setStatus("");
-		setQueue((cur) => (cur.some((q) => q.id === t.id) ? cur : [...cur, t]));
+		setQueue((cur) => {
+			if (cur.some((q) => q.id === t.id)) return cur;
+			setPlaylistDirty(true);
+			return [...cur, t];
+		});
 		await queueAdd(t, mode);
 	};
 
@@ -444,12 +541,93 @@ function App() {
 		await queueJump(i);
 	};
 
+	const openPlaylistModal = () => {
+		const entries = listPlaylists();
+		setPlEntries(entries);
+		setPlName(playlistName ?? "");
+		setPlDeleteArmedSlug(null);
+		const initialFocus: "input" | "list" =
+			entries.length > 0 ? "list" : "input";
+		setPlModalFocus(initialFocus);
+		const cur = playlistName
+			? entries.findIndex((e) => e.name === playlistName)
+			: -1;
+		setPlSelected(cur >= 0 ? cur : 0);
+		setShowPlaylists(true);
+	};
+
+	const closePlaylistModal = () => {
+		setShowPlaylists(false);
+		setPlDeleteArmedSlug(null);
+	};
+
+	const doSavePlaylist = () => {
+		const name = plName.trim();
+		if (!name) return;
+		const slug = savePlaylist(name, queue);
+		if (!slug) {
+			setStatus("Failed to save playlist");
+			return;
+		}
+		setPlaylistName(name);
+		setPlaylistDirty(false);
+		setStatus(`Saved playlist: ${name}`);
+		const refreshed = listPlaylists();
+		setPlEntries(refreshed);
+		const i = refreshed.findIndex((e) => e.slug === slug);
+		if (i >= 0) setPlSelected(i);
+		setPlModalFocus("list");
+	};
+
+	const doLoadPlaylist = async (entry: PlaylistEntry) => {
+		const data = loadPlaylist(entry.slug);
+		if (!data) {
+			setStatus(`Failed to load: ${entry.name}`);
+			return;
+		}
+		await queueSet(data.tracks);
+		setQueue(data.tracks);
+		setQueueIndex(-1);
+		setPreview(null);
+		setPlaying(false);
+		setPaused(false);
+		setPlaylistSelected(0);
+		setPlaylistName(data.name);
+		setPlaylistDirty(false);
+		setStatus(`Loaded: ${data.name} (${data.tracks.length})`);
+		closePlaylistModal();
+	};
+
+	const doDeletePlaylist = (entry: PlaylistEntry) => {
+		if (plDeleteArmedSlug !== entry.slug) {
+			setPlDeleteArmedSlug(entry.slug);
+			setStatus(`Press d again to delete "${entry.name}"`);
+			return;
+		}
+		const ok = deletePlaylist(entry.slug);
+		setPlDeleteArmedSlug(null);
+		if (!ok) {
+			setStatus(`Failed to delete: ${entry.name}`);
+			return;
+		}
+		if (playlistName === entry.name) {
+			setPlaylistName(null);
+			setPlaylistDirty(queue.length > 0);
+		}
+		const refreshed = listPlaylists();
+		setPlEntries(refreshed);
+		setPlSelected((c) => Math.max(0, Math.min(refreshed.length - 1, c)));
+		setStatus(`Deleted: ${entry.name}`);
+		if (refreshed.length === 0) setPlModalFocus("input");
+	};
+
 	const removeFromQueue = async (id: string) => {
 		await queueRemove(id);
 		setQueue((cur) => {
 			const i = cur.findIndex((t) => t.id === id);
 			if (i < 0) return cur;
 			const next = cur.filter((t) => t.id !== id);
+			setPlaylistDirty(true);
 			setQueueIndex((idx) => {
 				if (idx < 0) return idx;
 				if (i < idx) return idx - 1;
@@ -461,6 +639,39 @@ function App() {
 	};
 
 	useKeyboard((key) => {
+		if (showPlaylists) {
+			if (key.name === "escape") {
+				closePlaylistModal();
+				return;
+			}
+			if (key.name === "tab") {
+				setPlModalFocus((f) => (f === "input" ? "list" : "input"));
+				return;
+			}
+			if (plModalFocus === "list" && plEntries.length > 0) {
+				if (key.name === "up" || key.name === "k") {
+					setPlSelected((c) => Math.max(0, c - 1));
+					setPlDeleteArmedSlug(null);
+					return;
+				}
+				if (key.name === "down" || key.name === "j") {
+					setPlSelected((c) => Math.min(plEntries.length - 1, c + 1));
+					setPlDeleteArmedSlug(null);
+					return;
+				}
+				if (key.name === "return") {
+					const e = plEntries[plSelected];
+					if (e) doLoadPlaylist(e);
+					return;
+				}
+				if (key.name === "d") {
+					const e = plEntries[plSelected];
+					if (e) doDeletePlaylist(e);
+					return;
+				}
+			}
+			return;
+		}
 		if (
 			(key.name === "?" || (key.shift && key.name === "/")) &&
 			focus !== "search"
@@ -470,6 +681,10 @@ function App() {
 		}
 		if (key.name === "escape" && showHelp) {
 			setShowHelp(false);
+			return;
+		}
+		if (key.shift && key.name === "p" && focus !== "search") {
+			openPlaylistModal();
 			return;
 		}
 		if (key.name === "tab") {
@@ -584,6 +799,7 @@ function App() {
 		}
 		if (key.name === "x" && focus !== "search") {
 			queueShuffle();
+			if (queue.length > 1) setPlaylistDirty(true);
 			return;
 		}
 		if (key.name === "y" && focus !== "search") {
@@ -611,6 +827,8 @@ function App() {
 			setQueue([]);
 			setQueueIndex(-1);
 			setPlaylistSelected(0);
+			setPlaylistName(null);
+			setPlaylistDirty(false);
 			return;
 		}
 		if (
@@ -634,6 +852,7 @@ function App() {
 					return idx;
 				});
 				setPlaylistSelected(to);
+				setPlaylistDirty(true);
 				queueMove(from, to);
 			}
 			return;
@@ -659,6 +878,7 @@ function App() {
 					return idx;
 				});
 				setPlaylistSelected(to);
+				setPlaylistDirty(true);
 				queueMove(from, to);
 			}
 			return;
@@ -887,7 +1107,7 @@ function App() {
 					border
 					borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
 					backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
-					title={` Playlist (${queue.length}) `}
+					title={` ${playlistName ? `Playlist: ${playlistName}${playlistDirty ? " *" : ""}` : "Playlist"} (${queue.length}) `}
 					onMouseDown={() => setFocus("playlist")}
 				>
 					{queue.length > 0 ? (
@@ -937,6 +1157,90 @@ function App() {
 				</box>
 			</box>
 
+			{showPlaylists ? (
+				<box
+					position="absolute"
+					top={4}
+					left={6}
+					right={6}
+					border
+					backgroundColor={theme.bg}
+					title=" Playlists "
+					padding={1}
+					flexDirection="column"
+				>
+					<box
+						flexDirection="row"
+						border
+						borderColor={
+							plModalFocus === "input" ? theme.borderFocus : theme.border
+						}
+						backgroundColor={
+							plModalFocus === "input" ? theme.bgFocus : undefined
+						}
+						padding={1}
+						alignItems="center"
+						onMouseDown={() => setPlModalFocus("input")}
+					>
+						<text fg={theme.textMuted}>Save current queue as: </text>
+						<input
+							ref={plInputRef}
+							value={plName}
+							onInput={setPlName}
+							onSubmit={() => doSavePlaylist()}
+							placeholder={
+								queue.length > 0 ? "playlist name..." : "queue is empty"
+							}
+							placeholderColor={theme.textMuted}
+							flexGrow={1}
+						/>
+					</box>
+					<text> </text>
+					<box
+						flexDirection="column"
+						flexGrow={1}
+						border
+						borderColor={
+							plModalFocus === "list" ? theme.borderFocus : theme.border
+						}
+						backgroundColor={
+							plModalFocus === "list" ? theme.bgFocus : undefined
+						}
+						onMouseDown={() => setPlModalFocus("list")}
+					>
+						{plEntries.length > 0 ? (
+							plEntries.map((e, i) => {
+								const isCursor = i === plSelected && plModalFocus === "list";
+								const armed = plDeleteArmedSlug === e.slug;
+								return (
+									<text
+										key={e.slug}
+										bg={isCursor ? theme.bgRowSelected : undefined}
+										fg={isCursor ? theme.textRowSelected : undefined}
+										onMouseDown={() => {
+											setPlModalFocus("list");
+											setPlSelected(i);
+										}}
+									>
+										{`${isCursor ? "▶ " : "  "}${e.name}  (${e.count})${armed ? "  — press d to confirm" : ""}`}
+									</text>
+								);
+							})
+						) : (
+							<box padding={1}>
+								<text fg={theme.textMuted}>
+									No saved playlists. Type a name above and Enter to save.
+								</text>
+							</box>
+						)}
+					</box>
+					<text> </text>
+					<text fg={theme.textMuted}>
+						Tab: switch focus Enter on input: save Enter on list: load d: delete
+						Esc: close
+					</text>
+				</box>
+			) : null}
 			{showHelp ? (
 				<box
 					position="absolute"

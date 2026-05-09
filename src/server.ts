@@ -68,6 +68,7 @@ type Request =
 	| { cmd: "queue:move"; from: number; to: number }
 	| { cmd: "queue:shuffle" }
 	| { cmd: "queue:clear" }
+	| { cmd: "queue:set"; tracks: Track[] }
 	| { cmd: "next" }
 	| { cmd: "prev" }
 	| { cmd: "stop" }
@@ -535,6 +536,17 @@ export async function runServer(): Promise<void> {
 				}
 				return { ok: true };
 			}
+			case "queue:set": {
+				const tracks = Array.isArray(req.tracks) ? req.tracks : [];
+				queue = tracks.slice();
+				index = -1;
+				preview = null;
+				persist();
+				if (mpvReady) {
+					await mpvCmd(["quit"]);
+				}
+				return { ok: true };
+			}
 			case "next": {
 				if (queue.length === 0) return { ok: true };
 				if (preview) {
@@ -588,23 +600,19 @@ export async function runServer(): Promise<void> {
 					return { ok: true };
 				}
 				if (!mpvReady) {
-					const target = index < 0 ? queue.length - 1 : Math.max(0, index - 1);
+					const target = Math.max(0, (index < 0 ? 0 : index) - 1);
 					const ok = await spawnMpv();
 					if (!ok) return { ok: false, error: "mpv failed to start" };
 					await loadQueueIntoMpv(target);
 					return { ok: true };
 				}
 				if (index < 0) {
-					await mpvCmd(["set_property", "playlist-pos", queue.length - 1]);
+					await mpvCmd(["set_property", "playlist-pos", 0]);
 					return { ok: true };
 				}
 				const target = index - 1;
 				if (target < 0) {
-					if (!repeat) {
-						await mpvCmd(["set_property", "playlist-pos", 0]);
-						return { ok: true };
-					}
-					await mpvCmd(["set_property", "playlist-pos", queue.length - 1]);
+					await mpvCmd(["set_property", "playlist-pos", 0]);
 					return { ok: true };
 				}
 				await mpvCmd(["playlist-prev"]);
