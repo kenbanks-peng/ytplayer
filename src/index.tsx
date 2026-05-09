@@ -1310,7 +1310,8 @@ function App() {
 						backgroundColor={
 							plModalFocus === "input" ? theme.bgFocus : undefined
 						}
-						padding={1}
+						paddingLeft={1}
+						paddingRight={1}
 						alignItems="center"
 						onMouseDown={() => setPlModalFocus("input")}
 					>
