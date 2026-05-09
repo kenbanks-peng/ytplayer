@@ -1,10 +1,14 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
-	"linter": {
-		"rules": {
-			"a11y": {
-				"noStaticElementInteractions": "off"
-			}
-		}
-	}
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "linter": {
+    "rules": {
+      "a11y": {
+        "noStaticElementInteractions": "off"
+      }
+    }
+  }
 }
