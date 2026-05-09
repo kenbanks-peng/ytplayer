@@ -10,7 +10,7 @@ import { join } from "node:path";
 import {
   createCliRenderer,
   type InputRenderable,
-  type SelectRenderable,
+  type ScrollBoxRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { spawn } from "bun";
@@ -242,23 +242,14 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<InputRenderable | null>(null);
-  const resultsSelectRef = useRef<SelectRenderable | null>(null);
-  const playlistSelectRef = useRef<SelectRenderable | null>(null);
+  const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const playlistScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const { width: termWidth } = useTerminalDimensions();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when select mounts/unmounts
   useEffect(() => {
-    const target =
-      focus === "search"
-        ? inputRef.current
-        : focus === "results"
-          ? resultsSelectRef.current
-          : playlistSelectRef.current;
-    if (focus !== "search") inputRef.current?.blur();
-    if (focus !== "results") resultsSelectRef.current?.blur();
-    if (focus !== "playlist") playlistSelectRef.current?.blur();
-    target?.focus();
-  }, [focus, results.length, queue.length]);
+    if (focus === "search") inputRef.current?.focus();
+    else inputRef.current?.blur();
+  }, [focus]);
 
   const lastQueryRef = useRef("");
   const now = preview ?? (queueIndex >= 0 ? (queue[queueIndex] ?? null) : null);
@@ -330,6 +321,18 @@ function App() {
       setPlaylistSelected(queue.length - 1);
     }
   }, [queue.length, playlistSelected]);
+
+  useEffect(() => {
+    const t = results[selectedIndex];
+    if (!t) return;
+    resultsScrollRef.current?.scrollChildIntoView(`results-row-${t.id}`);
+  }, [selectedIndex, results]);
+
+  useEffect(() => {
+    const t = queue[playlistSelected];
+    if (!t) return;
+    playlistScrollRef.current?.scrollChildIntoView(`playlist-row-${t.id}`);
+  }, [playlistSelected, queue]);
 
   const doSearch = async (q: string = query) => {
     if (!q.trim() || searching) return;
@@ -441,6 +444,35 @@ function App() {
         f === "search" ? "results" : f === "results" ? "playlist" : "search",
       );
       return;
+    }
+    if (focus === "playlist" && queue.length > 0) {
+      if (key.name === "up") {
+        setPlaylistSelected((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.name === "down") {
+        setPlaylistSelected((c) => Math.min(queue.length - 1, c + 1));
+        return;
+      }
+      if (key.name === "return") {
+        jumpInQueue(playlistSelected);
+        return;
+      }
+    }
+    if (focus === "results" && results.length > 0) {
+      if (key.name === "up") {
+        setSelectedIndex((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.name === "down") {
+        setSelectedIndex((c) => Math.min(results.length - 1, c + 1));
+        return;
+      }
+      if (key.name === "return") {
+        const t = results[selectedIndex];
+        if (t) addToQueue(t);
+        return;
+      }
     }
     if (
       (key.ctrl && key.name === "c") ||
@@ -633,31 +665,9 @@ function App() {
   const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
   const nowId = now?.id ?? null;
-  const options = results.map((t) => {
-    const marker = t.id === nowId ? "▶" : pageMarker(t.page);
-    const title = fitCol(t.title.normalize("NFKC"), titleW);
-    const uploader = fitCol((t.uploader ?? "").normalize("NFKC"), uploaderW);
-    const views = fmtCount(t.views).padStart(viewsW, " ");
-    const duration = fmtDur(t.duration).padStart(durW, " ");
-    return {
-      name: `${marker} ${title}  ${uploader}  ${views}  ${duration}`,
-      description: "",
-      value: t.id,
-    };
-  });
 
   const plDurW = 6;
   const plTitleW = Math.max(10, playlistW - plDurW - 6);
-  const playlistOptions = queue.map((t, i) => {
-    const marker = i === queueIndex ? "▶" : " ";
-    const title = fitCol(t.title.normalize("NFKC"), plTitleW);
-    const duration = fmtDur(t.duration).padStart(plDurW, " ");
-    return {
-      name: `${marker} ${title}  ${duration}`,
-      description: "",
-      value: t.id,
-    };
-  });
 
   return (
     <box
@@ -751,43 +761,46 @@ function App() {
           title={` Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `}
           onMouseDown={() => setFocus("results")}
         >
-          {options.length > 0 ? (
+          {results.length > 0 ? (
             <>
               <text fg={theme.textMuted}>
                 {`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
               </text>
-              <select
-                ref={resultsSelectRef}
-                options={options}
-                backgroundColor="transparent"
-                focusedBackgroundColor="transparent"
-                selectedBackgroundColor={theme.bgRowSelected}
-                selectedTextColor={theme.textRowSelected}
-                showDescription={false}
-                selectedIndex={selectedIndex}
-                onChange={(i: number) => setSelectedIndex(i)}
-                onSelect={(i: number) => {
-                  const track = results[i];
-                  if (track) addToQueue(track);
-                }}
-                onMouseDown={(event) => {
-                  const sel = resultsSelectRef.current as unknown as {
-                    screenY: number;
-                    scrollOffset?: number;
-                  } | null;
-                  if (!sel) return;
-                  const localY = event.y - sel.screenY;
-                  const scrollOffset = sel.scrollOffset ?? 0;
-                  const idx = scrollOffset + localY;
-                  if (idx < 0 || idx >= results.length) return;
-                  const t = results[idx];
-                  if (!t) return;
-                  setFocus("results");
-                  setSelectedIndex(idx);
-                  previewFromResults(t);
-                }}
+              <scrollbox
+                ref={resultsScrollRef}
                 flexGrow={1}
-              />
+                rootOptions={{ backgroundColor: "transparent" }}
+                wrapperOptions={{ backgroundColor: "transparent" }}
+                viewportOptions={{ backgroundColor: "transparent" }}
+                contentOptions={{ backgroundColor: "transparent" }}
+              >
+                {results.map((t, i) => {
+                  const isCursor = i === selectedIndex;
+                  const marker = `  ${t.id === nowId ? "▶" : pageMarker(t.page)}`;
+                  const title = fitCol(t.title.normalize("NFKC"), titleW);
+                  const uploader = fitCol(
+                    (t.uploader ?? "").normalize("NFKC"),
+                    uploaderW,
+                  );
+                  const views = fmtCount(t.views).padStart(viewsW, " ");
+                  const duration = fmtDur(t.duration).padStart(durW, " ");
+                  return (
+                    <text
+                      key={t.id}
+                      id={`results-row-${t.id}`}
+                      bg={isCursor ? theme.bgRowSelected : undefined}
+                      fg={isCursor ? theme.textRowSelected : undefined}
+                      onMouseDown={() => {
+                        setFocus("results");
+                        setSelectedIndex(i);
+                        previewFromResults(t);
+                      }}
+                    >
+                      {`${marker} ${title}  ${uploader}  ${views}  ${duration}`}
+                    </text>
+                  );
+                })}
+              </scrollbox>
             </>
           ) : (
             <box padding={1}>
@@ -811,23 +824,37 @@ function App() {
           title={` Playlist (${queue.length}) `}
           onMouseDown={() => setFocus("playlist")}
         >
-          {playlistOptions.length > 0 ? (
-            <select
-              ref={playlistSelectRef}
-              options={playlistOptions}
-              backgroundColor="transparent"
-              focusedBackgroundColor="transparent"
-              selectedBackgroundColor={theme.bgRowSelected}
-              selectedTextColor={theme.textRowSelected}
-              showDescription={false}
-              selectedIndex={Math.min(
-                playlistSelected,
-                Math.max(0, playlistOptions.length - 1),
-              )}
-              onChange={(i: number) => setPlaylistSelected(i)}
-              onSelect={(i: number) => jumpInQueue(i)}
+          {queue.length > 0 ? (
+            <scrollbox
+              ref={playlistScrollRef}
               flexGrow={1}
-            />
+              rootOptions={{ backgroundColor: "transparent" }}
+              wrapperOptions={{ backgroundColor: "transparent" }}
+              viewportOptions={{ backgroundColor: "transparent" }}
+              contentOptions={{ backgroundColor: "transparent" }}
+            >
+              {queue.map((t, i) => {
+                const isPlaying = i === queueIndex;
+                const isCursor = i === playlistSelected;
+                const title = fitCol(t.title.normalize("NFKC"), plTitleW);
+                const duration = fmtDur(t.duration).padStart(plDurW, " ");
+                return (
+                  <text
+                    key={t.id}
+                    id={`playlist-row-${t.id}`}
+                    bg={isPlaying ? theme.bgRowSelected : undefined}
+                    fg={isPlaying ? theme.textRowSelected : undefined}
+                    onMouseDown={() => {
+                      setFocus("playlist");
+                      setPlaylistSelected(i);
+                      jumpInQueue(i);
+                    }}
+                  >
+                    {`${isCursor ? "▶ " : "  "}${title}  ${duration}`}
+                  </text>
+                );
+              })}
+            </scrollbox>
           ) : (
             <box padding={1}>
               <text fg={theme.textMuted}>Empty. Enter on a result to add.</text>
