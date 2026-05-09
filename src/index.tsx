@@ -640,15 +640,31 @@ function App() {
 	const doSavePlaylist = () => {
 		const name = plName.trim();
 		if (!name) return;
+		const sameName = playlistName === name;
+		if (sameName && !playlistDirty) {
+			setStatus(`Already saved as: ${name}`);
+			return;
+		}
 		const slug = savePlaylist(name, queue);
 		if (!slug) {
 			setStatus("Failed to save playlist");
 			return;
 		}
+		const renaming = !sameName && !playlistDirty && playlistName !== null;
+		if (renaming && playlistName) {
+			const oldSlug = slugify(playlistName);
+			if (oldSlug !== slug) deletePlaylist(oldSlug);
+		}
 		setPlaylistName(name);
 		setPlaylistDirty(false);
 		saveActiveAssoc({ name, trackIds: queue.map((t) => t.id) });
-		setStatus(`Saved playlist: ${name}`);
+		setStatus(
+			renaming
+				? `Renamed to: ${name}`
+				: sameName
+					? `Saved: ${name}`
+					: `Saved playlist: ${name}`,
+		);
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
 		const i = refreshed.findIndex((e) => e.slug === slug);
@@ -1043,6 +1059,20 @@ function App() {
 	const plDurW = 6;
 	const plTitleW = Math.max(10, playlistW - plDurW - 6);
 
+	const playlistUnsaved =
+		playlistDirty || (playlistName === null && queue.length > 0);
+	const plPrefix = `${playlistUnsaved ? "* " : ""}Playlist`;
+	const plCountSuffix = ` (${queue.length}) `;
+	const plNameBudget = Math.max(
+		0,
+		playlistW - 4 - displayWidth(plPrefix) - 2 - displayWidth(plCountSuffix),
+	);
+	const plNamePart =
+		playlistName && plNameBudget >= 4
+			? `: ${clip(playlistName, plNameBudget)}`
+			: "";
+	const playlistTitle = ` ${plPrefix}${plNamePart}${plCountSuffix}`;
+
 	return (
 		<box
 			flexDirection="column"
@@ -1204,14 +1234,7 @@ function App() {
 					border
 					borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
 					backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
-					title={(() => {
-						const unsaved =
-							playlistDirty || (playlistName === null && queue.length > 0);
-						const body = playlistName
-							? `Playlist: ${playlistName}`
-							: "Playlist";
-						return ` ${unsaved ? "* " : ""}${body} (${queue.length}) `;
-					})()}
+					title={playlistTitle}
 					onMouseDown={() => setFocus("playlist")}
 				>
 					{queue.length > 0 ? (
