@@ -787,8 +787,9 @@ function App() {
                 contentOptions={{ backgroundColor: "transparent" }}
               >
                 {results.map((t, i) => {
-                  const isCursor = i === selectedIndex;
-                  const marker = `  ${t.id === nowId ? "▶" : pageMarker(t.page)}`;
+                  const isCursor =
+                    i === selectedIndex && focus === "results";
+                  const marker = pageMarker(t.page);
                   const title = fitCol(t.title.normalize("NFKC"), titleW);
                   const uploader = fitCol(
                     (t.uploader ?? "").normalize("NFKC"),
@@ -808,7 +809,7 @@ function App() {
                         previewFromResults(t);
                       }}
                     >
-                      {`${marker} ${title}  ${uploader}  ${views}  ${duration}`}
+                      {`${isCursor ? "▶ " : "  "}${marker} ${title}  ${uploader}  ${views}  ${duration}`}
                     </text>
                   );
                 })}
@@ -847,15 +848,25 @@ function App() {
             >
               {queue.map((t, i) => {
                 const isPlaying = i === queueIndex;
-                const isCursor = i === playlistSelected;
+                const isCursor = i === playlistSelected && focus === "playlist";
                 const title = fitCol(t.title.normalize("NFKC"), plTitleW);
                 const duration = fmtDur(t.duration).padStart(plDurW, " ");
                 return (
                   <text
                     key={t.id}
                     id={`playlist-row-${t.id}`}
-                    bg={isPlaying ? theme.bgRowSelected : undefined}
-                    fg={isPlaying ? theme.textRowSelected : undefined}
+                    bg={
+                      isPlaying
+                        ? theme.bgPlaying
+                        : isCursor
+                          ? theme.bgRowSelected
+                          : undefined
+                    }
+                    fg={
+                      isPlaying || isCursor
+                        ? theme.textRowSelected
+                        : undefined
+                    }
                     onMouseDown={() => {
                       setFocus("playlist");
                       setPlaylistSelected(i);

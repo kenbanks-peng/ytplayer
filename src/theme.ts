@@ -42,6 +42,7 @@ export const theme = {
   bgFocus: mix(accent, palette.base, 0.08),
   bgRowSelected: mix(accent, palette.base, 1),
   textRowSelected: palette.base,
+  bgPlaying: palette.green,
   border: palette.subtext1,
   borderFocus: accent,
   text: palette.text,
