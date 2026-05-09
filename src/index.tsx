@@ -648,6 +648,7 @@ function App() {
 						focus === "results" ? theme.surfaceOverlay : theme.surface
 					}
 					title={` Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `}
+					onMouseDown={() => setFocus("results")}
 				>
 					{options.length > 0 ? (
 						<>
@@ -689,6 +690,7 @@ function App() {
 						focus === "playlist" ? theme.surfaceOverlay : theme.surface
 					}
 					title={` Playlist (${queue.length}) `}
+					onMouseDown={() => setFocus("playlist")}
 				>
 					{playlistOptions.length > 0 ? (
 						<select
@@ -721,6 +723,7 @@ function App() {
 				title=" YouTube Player "
 				padding={1}
 				alignItems="center"
+				onMouseDown={() => setFocus("search")}
 			>
 				<text>Search: </text>
 				<input
