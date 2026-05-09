@@ -661,6 +661,22 @@ function App() {
 									const track = results[i];
 									if (track) addToQueue(track);
 								}}
+								onMouseDown={(event) => {
+									const sel = resultsSelectRef.current as unknown as {
+										screenY: number;
+										scrollOffset?: number;
+									} | null;
+									if (!sel) return;
+									const localY = event.y - sel.screenY;
+									const scrollOffset = sel.scrollOffset ?? 0;
+									const idx = scrollOffset + localY;
+									if (idx < 0 || idx >= results.length) return;
+									const t = results[idx];
+									if (!t) return;
+									setFocus("results");
+									setSelectedIndex(idx);
+									previewFromResults(t);
+								}}
 								flexGrow={1}
 							/>
 						</>
