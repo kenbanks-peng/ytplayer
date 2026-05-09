@@ -414,7 +414,7 @@ function App() {
 		}
 		if (
 			(key.ctrl && key.name === "c") ||
-			(key.name === "q" && focus !== "search")
+			((key.name === "q" || key.name === "escape") && focus !== "search")
 		) {
 			process.nextTick(() => shutdown(0));
 			return;
