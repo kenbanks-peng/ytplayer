@@ -197,6 +197,22 @@ async function searchYouTube(
 
 type Focus = "search" | "results" | "playlist";
 
+function scrollCursorIntoView(
+  sb: ScrollBoxRenderable | null,
+  cursorIndex: number,
+  padding = 2,
+) {
+  if (!sb || cursorIndex < 0) return;
+  const viewH = sb.viewport.height;
+  if (viewH <= 0) return;
+  const top = sb.scrollTop;
+  if (cursorIndex < top + padding) {
+    sb.scrollTop = Math.max(0, cursorIndex - padding);
+  } else if (cursorIndex > top + viewH - padding - 1) {
+    sb.scrollTop = cursorIndex - viewH + padding + 1;
+  }
+}
+
 const HELP_LEFT: [string, string][] = [
   ["Tab", "cycle focus"],
   ["Enter", "add (results) / jump (playlist)"],
@@ -323,16 +339,12 @@ function App() {
   }, [queue.length, playlistSelected]);
 
   useEffect(() => {
-    const t = results[selectedIndex];
-    if (!t) return;
-    resultsScrollRef.current?.scrollChildIntoView(`results-row-${t.id}`);
-  }, [selectedIndex, results]);
+    scrollCursorIntoView(resultsScrollRef.current, selectedIndex);
+  }, [selectedIndex, results.length]);
 
   useEffect(() => {
-    const t = queue[playlistSelected];
-    if (!t) return;
-    playlistScrollRef.current?.scrollChildIntoView(`playlist-row-${t.id}`);
-  }, [playlistSelected, queue]);
+    scrollCursorIntoView(playlistScrollRef.current, playlistSelected);
+  }, [playlistSelected, queue.length]);
 
   const doSearch = async (q: string = query) => {
     if (!q.trim() || searching) return;
