@@ -154,6 +154,33 @@ function loadPlaylist(slug: string): { name: string; tracks: Track[] } | null {
 	}
 }
 
+function findPlaylistMatchingTrackIds(
+	trackIds: string[],
+): { name: string; slug: string } | null {
+	try {
+		if (!existsSync(PLAYLIST_DIR)) return null;
+		const files = readdirSync(PLAYLIST_DIR).filter((f) => f.endsWith(".json"));
+		for (const file of files) {
+			try {
+				const raw = readFileSync(join(PLAYLIST_DIR, file), "utf8");
+				const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
+				const tracks = Array.isArray(j.tracks) ? j.tracks : [];
+				if (
+					tracks.length === trackIds.length &&
+					tracks.every((t, i) => t.id === trackIds[i])
+				) {
+					const slug = file.slice(0, -5);
+					const name = typeof j.name === "string" ? j.name : slug;
+					return { name, slug };
+				}
+			} catch {}
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 function deletePlaylist(slug: string): boolean {
 	try {
 		const path = join(PLAYLIST_DIR, `${slug}.json`);
@@ -425,16 +452,26 @@ function App() {
 				);
 				if (state.mode === "audio" || state.mode === "video")
 					setMode(state.mode);
-				const assoc = loadActiveAssoc();
-				if (assoc) {
-					if (q.length === 0) {
-						saveActiveAssoc(null);
-					} else {
+				if (q.length === 0) {
+					saveActiveAssoc(null);
+				} else {
+					const assoc = loadActiveAssoc();
+					if (assoc) {
 						setPlaylistName(assoc.name);
 						const same =
 							q.length === assoc.trackIds.length &&
 							q.every((t, i) => t.id === assoc.trackIds[i]);
 						setPlaylistDirty(!same);
+					} else {
+						const match = findPlaylistMatchingTrackIds(q.map((t) => t.id));
+						if (match) {
+							setPlaylistName(match.name);
+							setPlaylistDirty(false);
+							saveActiveAssoc({
+								name: match.name,
+								trackIds: q.map((t) => t.id),
+							});
+						}
 					}
 				}
 			}
