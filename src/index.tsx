@@ -14,7 +14,7 @@ import {
 	type ScrollBoxRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { spawn } from "bun";
+import { type Subprocess, spawn } from "bun";
 import { useEffect, useRef, useState } from "react";
 import {
 	ensureServer,
@@ -304,18 +304,34 @@ async function searchYouTube(
 	page: number,
 	signal: AbortSignal,
 ): Promise<Track[]> {
-	const proc = spawn(
-		[
-			"yt-dlp",
-			`ytsearch${count}:${query}`,
-			"--flat-playlist",
-			"--dump-json",
-			"--no-warnings",
-		],
-		{ stdout: "pipe", stderr: "ignore", signal },
-	);
-	const text = await new Response(proc.stdout).text();
-	await proc.exited;
+	let proc: Subprocess<"ignore", "pipe", "pipe">;
+	try {
+		proc = spawn({
+			cmd: [
+				"yt-dlp",
+				`ytsearch${count}:${query}`,
+				"--flat-playlist",
+				"--dump-json",
+				"--no-warnings",
+			],
+			stdout: "pipe",
+			stderr: "pipe",
+			signal,
+		});
+	} catch (e) {
+		throw new Error(
+			`failed to launch yt-dlp (is it installed?): ${(e as Error).message}`,
+		);
+	}
+	const [text, errText, exitCode] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
+	if (exitCode !== 0 && !signal.aborted) {
+		const msg = errText.trim().split("\n").pop() ?? `exit ${exitCode}`;
+		throw new Error(`yt-dlp: ${msg}`);
+	}
 	const tracks: Track[] = [];
 	for (const line of text.split("\n")) {
 		if (!line.trim()) continue;
@@ -364,7 +380,7 @@ const HELP_LEFT: [string, string][] = [
 	["[ / ]", "move playlist item up/down"],
 	["x", "shuffle queue"],
 	["y", "yank to browser"],
-	["c", "clear results / clear queue"],
+	["c", "clear results / clear playlist"],
 	["P", "playlists: save / load / delete"],
 ];
 const HELP_RIGHT: [string, string][] = [
@@ -397,7 +413,6 @@ function App() {
 	const [mode, setMode] = useState<PlayMode>("audio");
 	const [position, setPosition] = useState(0);
 	const [trackDuration, setTrackDuration] = useState(0);
-	const [status, setStatus] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [playlistSelected, setPlaylistSelected] = useState(0);
 	const [showHelp, setShowHelp] = useState(false);
@@ -541,14 +556,12 @@ function App() {
 		abortRef.current = ac;
 		setSearching(true);
 		setError(null);
-		setStatus(`Searching: ${q}`);
 		try {
 			const tracks = await searchYouTube(q, PAGE_SIZE, 1, ac.signal);
 			lastQueryRef.current = q;
 			const sorted = sortByViewsDesc(tracks);
 			setResults(sorted);
 			saveSearch({ query: q, results: sorted });
-			setStatus("");
 			if (tracks.length > 0) setFocus("results");
 		} catch (e) {
 			const err = e as { name?: string; message?: string };
@@ -573,7 +586,6 @@ function App() {
 			const seen = new Set(results.map((r) => r.id));
 			const fresh = all.filter((t) => !seen.has(t.id));
 			if (fresh.length === 0) {
-				setStatus(`No more results for "${q}"`);
 				return;
 			}
 			setResults((cur) => {
@@ -581,7 +593,6 @@ function App() {
 				saveSearch({ query: q, results: merged });
 				return merged;
 			});
-			setStatus("");
 		} catch (e) {
 			const err = e as { name?: string; message?: string };
 			if (err.name !== "AbortError") setError(String(err.message ?? e));
@@ -591,17 +602,15 @@ function App() {
 	};
 
 	const addToQueue = async (t: Track) => {
-		setStatus("");
 		setQueue((cur) => {
 			if (cur.some((q) => q.id === t.id)) return cur;
 			setPlaylistDirty(true);
 			return [...cur, t];
 		});
-		await queueAdd(t, mode);
+		await queueAdd(t);
 	};
 
 	const previewFromResults = async (t: Track) => {
-		setStatus("");
 		setPreview(t);
 		setQueueIndex(-1);
 		setPaused(false);
@@ -642,12 +651,10 @@ function App() {
 		if (!name) return;
 		const sameName = playlistName === name;
 		if (sameName && !playlistDirty) {
-			setStatus(`Already saved as: ${name}`);
 			return;
 		}
 		const slug = savePlaylist(name, queue);
 		if (!slug) {
-			setStatus("Failed to save playlist");
 			return;
 		}
 		const renaming = !sameName && !playlistDirty && playlistName !== null;
@@ -658,13 +665,6 @@ function App() {
 		setPlaylistName(name);
 		setPlaylistDirty(false);
 		saveActiveAssoc({ name, trackIds: queue.map((t) => t.id) });
-		setStatus(
-			renaming
-				? `Renamed to: ${name}`
-				: sameName
-					? `Saved: ${name}`
-					: `Saved playlist: ${name}`,
-		);
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
 		const i = refreshed.findIndex((e) => e.slug === slug);
@@ -675,7 +675,6 @@ function App() {
 	const doLoadPlaylist = async (entry: PlaylistEntry) => {
 		const data = loadPlaylist(entry.slug);
 		if (!data) {
-			setStatus(`Failed to load: ${entry.name}`);
 			return;
 		}
 		const sameTracks =
@@ -688,7 +687,6 @@ function App() {
 				name: data.name,
 				trackIds: data.tracks.map((t) => t.id),
 			});
-			setStatus(`Already loaded: ${data.name}`);
 			closePlaylistModal();
 			return;
 		}
@@ -705,20 +703,17 @@ function App() {
 			name: data.name,
 			trackIds: data.tracks.map((t) => t.id),
 		});
-		setStatus(`Loaded: ${data.name} (${data.tracks.length})`);
 		closePlaylistModal();
 	};
 
 	const doDeletePlaylist = (entry: PlaylistEntry) => {
 		if (plDeleteArmedSlug !== entry.slug) {
 			setPlDeleteArmedSlug(entry.slug);
-			setStatus(`Press d again to delete "${entry.name}"`);
 			return;
 		}
 		const ok = deletePlaylist(entry.slug);
 		setPlDeleteArmedSlug(null);
 		if (!ok) {
-			setStatus(`Failed to delete: ${entry.name}`);
 			return;
 		}
 		if (playlistName === entry.name) {
@@ -729,7 +724,6 @@ function App() {
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
 		setPlSelected((c) => Math.max(0, Math.min(refreshed.length - 1, c)));
-		setStatus(`Deleted: ${entry.name}`);
 		if (refreshed.length === 0) setPlModalFocus("input");
 	};
 
@@ -1006,7 +1000,6 @@ function App() {
 			setResults([]);
 			setSelectedIndex(0);
 			setError(null);
-			setStatus("");
 			lastQueryRef.current = "";
 			saveSearch(null);
 			setFocus("search");
@@ -1019,7 +1012,7 @@ function App() {
 	const resultsW = Math.floor(inner * 0.6);
 	const playlistW = inner - resultsW;
 
-	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} • ? `;
+	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
 	const searchW = playlistW;
 	const topPanelInner = Math.max(0, termWidth - searchW - 6);
 	const leftLabel = " YouTube Player ";
@@ -1028,6 +1021,14 @@ function App() {
 		topPanelInner - leftLabel.length - modeLabel.length - 4,
 	);
 	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
+
+	const searchLeftLabel = " Search ";
+	const searchRightLabel = " ? ";
+	const searchGap = Math.max(
+		1,
+		searchW - searchLeftLabel.length - searchRightLabel.length - 4,
+	);
+	const searchTitle = `${searchLeftLabel}${"─".repeat(searchGap)}${searchRightLabel}`;
 
 	const queueLabel = now ? ` [${queueIndex + 1}/${queue.length}]` : "";
 	const progressW = Math.max(10, topPanelInner - 14 - queueLabel.length);
@@ -1086,7 +1087,7 @@ function App() {
 			padding={1}
 			backgroundColor={theme.bg}
 		>
-			<box flexDirection="row" minHeight={7} flexShrink={0}>
+			<box flexDirection="row" minHeight={4} flexShrink={0}>
 				<box
 					flexGrow={1}
 					flexBasis={resultsW}
@@ -1094,7 +1095,7 @@ function App() {
 					border
 					borderColor={theme.border}
 					title={topTitle}
-					padding={1}
+					paddingLeft={1}
 				>
 					{now ? (
 						<>
@@ -1132,8 +1133,6 @@ function App() {
 					) : (
 						<text fg={theme.textMuted}>Nothing playing</text>
 					)}
-					<text fg={theme.textMuted}>{status}</text>
-					{now ? null : <text fg={theme.textMuted}>? for keys</text>}
 				</box>
 				<box
 					flexBasis={searchW}
@@ -1141,8 +1140,8 @@ function App() {
 					border
 					borderColor={focus === "search" ? theme.borderFocus : theme.border}
 					backgroundColor={focus === "search" ? theme.bgFocus : undefined}
-					title=" Search "
-					padding={1}
+					title={searchTitle}
+					paddingLeft={1}
 					alignItems="center"
 					onMouseDown={() => setFocus("search")}
 				>
@@ -1435,7 +1434,7 @@ function App() {
 						</box>
 					</box>
 					<text> </text>
-					<text fg={theme.textMuted}>? or Esc to close</text>
+					<text fg={theme.textMuted}>Esc to close</text>
 				</box>
 			) : null}
 		</box>

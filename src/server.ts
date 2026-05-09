@@ -60,7 +60,7 @@ function loadStateFile(): PersistedState | null {
 type Request =
 	| { cmd: "ping" }
 	| { cmd: "state" }
-	| { cmd: "queue:add"; track: Track; mode?: PlayMode }
+	| { cmd: "queue:add"; track: Track }
 	| { cmd: "queue:play"; track: Track }
 	| { cmd: "play:preview"; track: Track }
 	| { cmd: "queue:remove"; id: string }
@@ -82,6 +82,7 @@ export async function runServer(): Promise<void> {
 	let mpv: Subprocess | null = null;
 	let mpvSock: Socket | null = null;
 	let mpvReady = false;
+	let shuttingDown = false;
 	let queue: Track[] = [];
 	let index = -1;
 	let paused = false;
@@ -375,8 +376,6 @@ export async function runServer(): Promise<void> {
 			case "queue:add": {
 				if (!req.track) return { ok: false, error: "missing track" };
 				if (queue.some((t) => t.id === req.track.id)) return { ok: true };
-				const modeChanged = req.mode && req.mode !== mode;
-				if (req.mode) mode = req.mode;
 				queue.push(req.track);
 				persist();
 				// While previewing, leave mpv alone — the queue is built up in the
@@ -384,18 +383,7 @@ export async function runServer(): Promise<void> {
 				// away from the preview (next/prev/jump/play).
 				if (preview) return { ok: true };
 				if (mpvReady) {
-					if (modeChanged) {
-						// Mode flag flipped while mpv is running; restart with the
-						// new --no-video / --ytdl-format args so the new track
-						// actually plays in the requested mode.
-						const wasIndex = index;
-						await killMpv();
-						const ok = await spawnMpv();
-						if (!ok) return { ok: false, error: "mpv failed to start" };
-						await loadQueueIntoMpv(wasIndex >= 0 ? wasIndex : 0);
-					} else {
-						await mpvCmd(["loadfile", req.track.url, "append"]);
-					}
+					await mpvCmd(["loadfile", req.track.url, "append"]);
 				}
 				return { ok: true };
 			}
@@ -442,14 +430,21 @@ export async function runServer(): Promise<void> {
 			case "queue:remove": {
 				const i = queue.findIndex((t) => t.id === req.id);
 				if (i < 0) return { ok: true };
+				const removedCurrent = i === index;
 				queue.splice(i, 1);
 				if (i < index) {
 					index--;
-				} else if (i === index) {
+				} else if (removedCurrent) {
 					// Removing the current track: mpv advances to the next one,
 					// which after the splice now occupies the same slot. If we
 					// removed the tail, fall back to the new last track (or -1).
 					if (index >= queue.length) index = queue.length - 1;
+					// mpv will fire playlist-pos with the same numeric index
+					// (next track shifted into this slot), so the observer skips
+					// resetting position/duration. Clear them now so the UI
+					// doesn't show the removed track's stale progress.
+					position = 0;
+					duration = 0;
 				}
 				persist();
 				if (mpvReady) {
@@ -537,8 +532,16 @@ export async function runServer(): Promise<void> {
 				return { ok: true };
 			}
 			case "queue:set": {
-				const tracks = Array.isArray(req.tracks) ? req.tracks : [];
-				queue = tracks.slice();
+				const raw = Array.isArray(req.tracks) ? req.tracks : [];
+				const tracks = raw.filter(
+					(t): t is Track =>
+						!!t &&
+						typeof t === "object" &&
+						typeof (t as Track).id === "string" &&
+						typeof (t as Track).url === "string" &&
+						typeof (t as Track).title === "string",
+				);
+				queue = tracks;
 				index = -1;
 				preview = null;
 				persist();
@@ -679,7 +682,9 @@ export async function runServer(): Promise<void> {
 			}
 			case "shutdown": {
 				await killMpv();
-				setTimeout(() => process.exit(0), 10);
+				// Don't exit here — let the connection handler flush the reply
+				// first, then exit once the socket drains.
+				shuttingDown = true;
 				return { ok: true };
 			}
 			default:
@@ -688,6 +693,37 @@ export async function runServer(): Promise<void> {
 	};
 
 	if (existsSync(SERVER_SOCK)) {
+		// If a previous server is still alive on this socket, don't fight it —
+		// exit silently. ensureServer() pings before spawning, but a slow
+		// shutdown can race the new spawn; this prevents stomping a live socket
+		// and orphaning the old daemon's mpv.
+		const alive = await new Promise<boolean>((resolve) => {
+			let done = false;
+			const finish = (v: boolean) => {
+				if (done) return;
+				done = true;
+				clearTimeout(timer);
+				try {
+					s.destroy();
+				} catch {}
+				resolve(v);
+			};
+			const timer = setTimeout(() => finish(false), 300);
+			const s = connect(SERVER_SOCK);
+			s.on("connect", () => {
+				try {
+					s.write(`${JSON.stringify({ cmd: "ping" })}\n`);
+				} catch {
+					finish(false);
+				}
+			});
+			s.on("data", () => finish(true));
+			s.on("error", () => finish(false));
+			s.on("close", () => finish(false));
+		});
+		if (alive) {
+			process.exit(0);
+		}
 		try {
 			unlinkSync(SERVER_SOCK);
 		} catch {}
@@ -711,6 +747,13 @@ export async function runServer(): Promise<void> {
 				}
 				const reply = await handle(req);
 				sock.write(`${JSON.stringify(reply)}\n`);
+				if (shuttingDown) {
+					sock.end();
+					// Exit once the write has drained to the kernel.
+					sock.once("close", () => process.exit(0));
+					// Safety net in case the client never closes its end.
+					setTimeout(() => process.exit(0), 500);
+				}
 			}
 		});
 		sock.on("error", () => {});

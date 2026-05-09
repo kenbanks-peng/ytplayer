@@ -80,8 +80,8 @@ export async function ensureServer(): Promise<void> {
 }
 
 export const getState = () => send<ServerState>({ cmd: "state" });
-export const queueAdd = (track: Track, mode: PlayMode) =>
-	send<{ ok: boolean }>({ cmd: "queue:add", track, mode });
+export const queueAdd = (track: Track) =>
+	send<{ ok: boolean }>({ cmd: "queue:add", track });
 export const queuePlay = (track: Track) =>
 	send<{ ok: boolean }>({ cmd: "queue:play", track });
 export const queuePreview = (track: Track) =>

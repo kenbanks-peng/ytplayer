@@ -43,17 +43,28 @@ Three panes: search input on top, search results on the left, playlist on the ri
 ## Keys
 
 - `Tab` — cycle focus (search → results → playlist)
-- `Enter` (results) — append the selected track to the playlist; auto-play if the queue was empty
+- `h` / `l` — switch focus between results and playlist
+- `Enter` (results) — append the selected track to the playlist
 - `Enter` (playlist) — jump to and play that item
+- `i` (results) — instant preview the highlighted track (queue is preserved)
+- `g` — go play the playlist (from the highlighted item if focused there, else from the top)
 - `d` (playlist) — remove the highlighted item
-- `>` / `<` — next / previous track in the playlist
-- `Space` — pause/resume
+- `d` (results) — remove the highlighted result from the playlist (if present)
+- `[` / `]` (playlist) — move the highlighted item up / down
+- `x` — shuffle the queue
+- `y` — yank: open the highlighted track in the browser
+- `Space` — pause / resume
+- `p` / `n` — previous / next track
+- `←` / `→` — seek -10s / +10s
 - `s` — stop (clears current playback; queue is preserved)
 - `r` — toggle repeat (wraps the whole playlist)
-- `m` — toggle audio/video mode
-- `n` / `PageDown` — load more search results
+- `m` — toggle audio / video mode
+- `f` — fetch more results (or run search if the input changed)
 - `c` (results) — clear search results and cache
-- `q` / `Ctrl-C` — quit the TUI (server keeps running)
+- `c` (playlist) — clear the playlist
+- `P` — playlists modal: save / load / delete (press `d` twice to delete)
+- `?` — toggle keys overlay
+- `q` / `Ctrl-C` / `Esc` — quit the TUI (server keeps running)
 
 ## Architecture
 
