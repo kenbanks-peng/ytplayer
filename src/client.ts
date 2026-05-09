@@ -106,3 +106,5 @@ export const setMode = (mode: PlayMode) =>
 	send<{ ok: boolean; mode: PlayMode }>({ cmd: "mode", mode });
 export const seekRelative = (seconds: number) =>
 	send<{ ok: boolean }>({ cmd: "seek", seconds });
+export const seekAbsolute = (seconds: number) =>
+	send<{ ok: boolean }>({ cmd: "seek", seconds, absolute: true });

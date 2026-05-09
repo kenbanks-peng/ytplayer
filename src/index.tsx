@@ -27,6 +27,7 @@ import {
 	queuePreview,
 	queueRemove,
 	queueShuffle,
+	seekAbsolute,
 	seekRelative,
 	setMode as setModeOnServer,
 	setRepeat,
@@ -753,12 +754,27 @@ function App() {
 									<span fg={theme.textMuted}> — {nowUploaderStr}</span>
 								) : null}
 							</text>
-							<text>
-								<span fg={theme.textMuted}>{fmtDur(position)} </span>
-								<span fg={theme.accent}>{progressBar}</span>
-								<span fg={theme.textMuted}> {fmtDur(totalSec)}</span>
-								<span fg={theme.textMuted}>{queueLabel}</span>
-							</text>
+							<box flexDirection="row">
+								<text fg={theme.textMuted}>{fmtDur(position)} </text>
+								<text
+									fg={theme.accent}
+									onMouseDown={(e) => {
+										if (totalSec <= 0 || progressW <= 0) return;
+										const target = e.target;
+										if (!target) return;
+										const rel = e.x - target.screenX;
+										const ratio = Math.max(0, Math.min(1, rel / progressW));
+										const newPos = ratio * totalSec;
+										seekAbsolute(newPos);
+										setPosition(newPos);
+									}}
+								>
+									{progressBar}
+								</text>
+								<text fg={theme.textMuted}>
+									{` ${fmtDur(totalSec)}${queueLabel}`}
+								</text>
+							</box>
 						</>
 					) : (
 						<text fg={theme.textMuted}>Nothing playing</text>
