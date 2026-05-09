@@ -62,6 +62,7 @@ type Request =
 	| { cmd: "state" }
 	| { cmd: "queue:add"; track: Track; mode?: PlayMode }
 	| { cmd: "queue:play"; track: Track }
+	| { cmd: "play:preview"; track: Track }
 	| { cmd: "queue:remove"; id: string }
 	| { cmd: "queue:jump"; index: number }
 	| { cmd: "queue:move"; from: number; to: number }
@@ -84,6 +85,9 @@ export async function runServer(): Promise<void> {
 	let paused = false;
 	let repeat = false;
 	let mode: PlayMode = "audio";
+	// Track currently playing as a one-off preview (not part of `queue`).
+	// While set, mpv's playlist contains only this track.
+	let preview: Track | null = null;
 	// Set to true right before we issue an intentional mpv shutdown (quit/kill).
 	// Lets the proc.exited handler distinguish "we asked it to die" from "user
 	// closed the window" — only the latter should forget the playback position.
@@ -135,6 +139,9 @@ export async function runServer(): Promise<void> {
 		}
 		if (msg.event === "property-change") {
 			if (msg.name === "playlist-pos") {
+				// While previewing, mpv's playlist holds only the preview track —
+				// its playlist-pos is unrelated to the queue's index.
+				if (preview) return;
 				const v = typeof msg.data === "number" ? msg.data : -1;
 				if (v !== index) {
 					index = v;
@@ -242,6 +249,8 @@ export async function runServer(): Promise<void> {
 				// mpv to quit (stop/clear/mode/shuffle/shutdown).
 				if (intentionalExit) index = -1;
 				intentionalExit = false;
+				// Preview is single-shot: once mpv exits, the preview is over.
+				preview = null;
 				paused = false;
 				persist();
 			}
@@ -338,13 +347,17 @@ export async function runServer(): Promise<void> {
 			case "ping":
 				return { ok: true, version: binaryVersion() };
 			case "state":
-				return { queue, index, paused, repeat, mode };
+				return { queue, index, paused, repeat, mode, preview };
 			case "queue:add": {
 				if (!req.track) return { ok: false, error: "missing track" };
 				const modeChanged = req.mode && req.mode !== mode;
 				if (req.mode) mode = req.mode;
 				queue.push(req.track);
 				persist();
+				// While previewing, leave mpv alone — the queue is built up in the
+				// background and gets loaded into mpv when the user transitions
+				// away from the preview (next/prev/jump/play).
+				if (preview) return { ok: true };
 				if (mpvReady) {
 					if (modeChanged) {
 						// Mode flag flipped while mpv is running; restart with the
@@ -363,6 +376,9 @@ export async function runServer(): Promise<void> {
 			}
 			case "queue:play": {
 				if (!req.track) return { ok: false, error: "missing track" };
+				const wasPreview = preview !== null;
+				if (wasPreview && mpvReady) await killMpv();
+				preview = null;
 				let i = queue.findIndex((t) => t.id === req.track.id);
 				if (i < 0) {
 					queue.push(req.track);
@@ -381,6 +397,21 @@ export async function runServer(): Promise<void> {
 				index = i;
 				paused = false;
 				persist();
+				return { ok: true };
+			}
+			case "play:preview": {
+				if (!req.track) return { ok: false, error: "missing track" };
+				if (mpvReady) await killMpv();
+				preview = req.track;
+				index = -1;
+				paused = false;
+				persist();
+				const ok = await spawnMpv();
+				if (!ok) {
+					preview = null;
+					return { ok: false, error: "mpv failed to start" };
+				}
+				await mpvCmd(["loadfile", req.track.url, "replace"]);
 				return { ok: true };
 			}
 			case "queue:remove": {
@@ -403,6 +434,9 @@ export async function runServer(): Promise<void> {
 			}
 			case "queue:jump": {
 				if (req.index < 0 || req.index >= queue.length) return { ok: true };
+				const wasPreview = preview !== null;
+				if (wasPreview && mpvReady) await killMpv();
+				preview = null;
 				if (!mpvReady) {
 					const ok = await spawnMpv();
 					if (!ok) return { ok: false, error: "mpv failed to start" };
@@ -410,6 +444,9 @@ export async function runServer(): Promise<void> {
 				} else {
 					await mpvCmd(["set_property", "playlist-pos", req.index]);
 				}
+				index = req.index;
+				paused = false;
+				persist();
 				return { ok: true };
 			}
 			case "queue:move": {
@@ -439,6 +476,8 @@ export async function runServer(): Promise<void> {
 			}
 			case "queue:shuffle": {
 				if (queue.length < 2) return { ok: true };
+				if (preview && mpvReady) await killMpv();
+				preview = null;
 				const currentId = index >= 0 ? (queue[index]?.id ?? null) : null;
 				for (let i = queue.length - 1; i > 0; i--) {
 					const j = Math.floor(Math.random() * (i + 1));
@@ -465,6 +504,7 @@ export async function runServer(): Promise<void> {
 			case "queue:clear": {
 				queue = [];
 				index = -1;
+				preview = null;
 				persist();
 				if (mpvReady) {
 					await mpvCmd(["quit"]);
@@ -473,6 +513,17 @@ export async function runServer(): Promise<void> {
 			}
 			case "next": {
 				if (queue.length === 0) return { ok: true };
+				if (preview) {
+					if (mpvReady) await killMpv();
+					preview = null;
+					const ok = await spawnMpv();
+					if (!ok) return { ok: false, error: "mpv failed to start" };
+					await loadQueueIntoMpv(0);
+					index = 0;
+					paused = false;
+					persist();
+					return { ok: true };
+				}
 				if (!mpvReady) {
 					const target = index < 0 ? 0 : Math.min(index + 1, queue.length - 1);
 					const ok = await spawnMpv();
@@ -500,6 +551,18 @@ export async function runServer(): Promise<void> {
 			}
 			case "prev": {
 				if (queue.length === 0) return { ok: true };
+				if (preview) {
+					if (mpvReady) await killMpv();
+					preview = null;
+					const target = queue.length - 1;
+					const ok = await spawnMpv();
+					if (!ok) return { ok: false, error: "mpv failed to start" };
+					await loadQueueIntoMpv(target);
+					index = target;
+					paused = false;
+					persist();
+					return { ok: true };
+				}
 				if (!mpvReady) {
 					const target = index < 0 ? queue.length - 1 : Math.max(0, index - 1);
 					const ok = await spawnMpv();
@@ -528,11 +591,13 @@ export async function runServer(): Promise<void> {
 					await mpvCmd(["quit"]);
 				}
 				index = -1;
+				preview = null;
 				paused = false;
 				persist();
 				return { ok: true };
 			case "pause": {
-				if (!mpvReady || index < 0) return { ok: true, paused: false };
+				if (!mpvReady || (index < 0 && !preview))
+					return { ok: true, paused: false };
 				await mpvCmd(["cycle", "pause"]);
 				// Read back rather than guessing — mpv may have been paused for
 				// reasons other than our toggle (buffering, etc.).
@@ -557,13 +622,18 @@ export async function runServer(): Promise<void> {
 				if (next !== "audio" && next !== "video") return { ok: true, mode };
 				if (next === mode) return { ok: true, mode };
 				const wasIndex = index;
+				const wasPreview = preview;
 				mode = next;
 				persist();
 				if (mpvReady) {
 					await killMpv();
 					const ok = await spawnMpv();
 					if (!ok) return { ok: false, error: "mpv failed to start" };
-					await loadQueueIntoMpv(wasIndex >= 0 ? wasIndex : 0);
+					if (wasPreview) {
+						await mpvCmd(["loadfile", wasPreview.url, "replace"]);
+					} else {
+						await loadQueueIntoMpv(wasIndex >= 0 ? wasIndex : 0);
+					}
 				}
 				return { ok: true, mode };
 			}

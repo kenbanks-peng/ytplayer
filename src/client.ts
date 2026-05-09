@@ -84,6 +84,8 @@ export const queueAdd = (track: Track, mode: PlayMode) =>
 	send<{ ok: boolean }>({ cmd: "queue:add", track, mode });
 export const queuePlay = (track: Track) =>
 	send<{ ok: boolean }>({ cmd: "queue:play", track });
+export const queuePreview = (track: Track) =>
+	send<{ ok: boolean }>({ cmd: "play:preview", track });
 export const queueRemove = (id: string) =>
 	send<{ ok: boolean }>({ cmd: "queue:remove", id });
 export const queueJump = (index: number) =>

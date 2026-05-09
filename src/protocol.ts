@@ -16,10 +16,11 @@ export type ServerState = {
 	paused: boolean;
 	repeat: boolean;
 	mode: PlayMode;
+	preview: Track | null;
 };
 
 export const SERVER_SOCK = "/tmp/ytplayer.sock";
 
 // Bump this whenever the wire protocol changes incompatibly. ensureServer()
 // compares it against the running server's reply to detect stale daemons.
-export const PROTOCOL_VERSION = "8";
+export const PROTOCOL_VERSION = "9";

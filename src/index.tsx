@@ -24,7 +24,7 @@ import {
 	queueClear,
 	queueJump,
 	queueMove,
-	queuePlay,
+	queuePreview,
 	queueRemove,
 	queueShuffle,
 	setMode as setModeOnServer,
@@ -204,6 +204,7 @@ function App() {
 	const [focus, setFocus] = useState<Focus>("search");
 	const [queue, setQueue] = useState<Track[]>([]);
 	const [queueIndex, setQueueIndex] = useState(-1);
+	const [preview, setPreview] = useState<Track | null>(null);
 	const [paused, setPaused] = useState(false);
 	const [repeat, setRepeatState] = useState(false);
 	const [mode, setMode] = useState<PlayMode>("audio");
@@ -232,7 +233,7 @@ function App() {
 	}, [focus, results.length, queue.length]);
 
 	const lastQueryRef = useRef("");
-	const now = queueIndex >= 0 ? (queue[queueIndex] ?? null) : null;
+	const now = preview ?? (queueIndex >= 0 ? (queue[queueIndex] ?? null) : null);
 
 	useEffect(() => {
 		(async () => {
@@ -242,6 +243,7 @@ function App() {
 			if (state) {
 				setQueue(q);
 				setQueueIndex(idx);
+				setPreview(state.preview ?? null);
 				setPaused(Boolean(state.paused));
 				setRepeatState(Boolean(state.repeat));
 				if (state.mode === "audio" || state.mode === "video")
@@ -272,6 +274,7 @@ function App() {
 				return cur;
 			});
 			setQueueIndex(idx);
+			setPreview(state.preview ?? null);
 			setPaused(Boolean(state.paused));
 			setRepeatState(Boolean(state.repeat));
 			if (state.mode === "audio" || state.mode === "video") setMode(state.mode);
@@ -356,19 +359,12 @@ function App() {
 		await queueAdd(t, mode);
 	};
 
-	const playFromResults = async (t: Track) => {
+	const previewFromResults = async (t: Track) => {
 		setStatus("");
-		setQueue((cur) => {
-			const i = cur.findIndex((q) => q.id === t.id);
-			if (i >= 0) {
-				setQueueIndex(i);
-				return cur;
-			}
-			setQueueIndex(cur.length);
-			return [...cur, t];
-		});
+		setPreview(t);
+		setQueueIndex(-1);
 		setPaused(false);
-		await queuePlay(t);
+		await queuePreview(t);
 	};
 
 	const jumpInQueue = async (i: number) => {
@@ -493,7 +489,7 @@ function App() {
 		}
 		if (key.name === "p" && focus === "results") {
 			const t = results[selectedIndex];
-			if (t) playFromResults(t);
+			if (t) previewFromResults(t);
 			return;
 		}
 		if (key.name === "c" && focus === "playlist") {
@@ -772,7 +768,7 @@ function App() {
 							</text>
 							<text>
 								<span fg={theme.keyHint}>p </span>
-								<span fg={theme.textMuted}>play selected result now</span>
+								<span fg={theme.textMuted}>preview result (no queue add)</span>
 							</text>
 							<text>
 								<span fg={theme.keyHint}>d </span>
