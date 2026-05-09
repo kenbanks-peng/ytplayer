@@ -1,21 +1,21 @@
 {
-	"name": "ytmusic",
-	"module": "src/index.tsx",
-	"type": "module",
-	"private": true,
-	"scripts": {
-		"dev": "bun run --watch src/index.tsx",
-		"build": "bun build --compile src/index.tsx --outfile bin/ytplayer"
-	},
-	"devDependencies": {
-		"@types/bun": "latest"
-	},
-	"peerDependencies": {
-		"typescript": "^5"
-	},
-	"dependencies": {
-		"@opentui/core": "^0.2.1",
-		"@opentui/react": "^0.2.1",
-		"react": "^19.2.4"
-	}
+  "name": "ytmusic",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.tsx",
+    "build": "bun build --compile src/index.tsx --outfile bin/ytplayer"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.2.1",
+    "@opentui/react": "^0.2.1",
+    "react": "^19.2.4"
+  }
 }
