@@ -585,6 +585,16 @@ function App() {
 			setStatus(`Failed to load: ${entry.name}`);
 			return;
 		}
+		const sameTracks =
+			queue.length === data.tracks.length &&
+			queue.every((t, i) => t.id === data.tracks[i]?.id);
+		if (sameTracks) {
+			setPlaylistName(data.name);
+			setPlaylistDirty(false);
+			setStatus(`Already loaded: ${data.name}`);
+			closePlaylistModal();
+			return;
+		}
 		await queueSet(data.tracks);
 		setQueue(data.tracks);
 		setQueueIndex(-1);
@@ -1235,10 +1245,39 @@ function App() {
 						)}
 					</box>
 					<text> </text>
-					<text fg={theme.textMuted}>
-						Tab: switch focus Enter on input: save Enter on list: load d: delete
-						Esc: close
-					</text>
+					<box flexDirection="row">
+						<box flexDirection="column" flexGrow={1}>
+							{(plModalFocus === "input"
+								? ([
+										["Enter", "save current queue"],
+										["Tab", "focus list"],
+									] as [string, string][])
+								: ([
+										["Enter", "load playlist"],
+										["d", "delete (press twice)"],
+										["Tab", "focus name input"],
+									] as [string, string][])
+							).map(([k, h]) => (
+								<text key={k}>
+									<span fg={theme.keyHint}>{fitCol(k, 8)}</span>
+									<span fg={theme.textMuted}>{h}</span>
+								</text>
+							))}
+						</box>
+						<box flexDirection="column" flexGrow={1}>
+							{(
+								[
+									["↑ ↓ / j k", "navigate list"],
+									["Esc", "close"],
+								] as [string, string][]
+							).map(([k, h]) => (
+								<text key={k}>
+									<span fg={theme.keyHint}>{fitCol(k, 12)}</span>
+									<span fg={theme.textMuted}>{h}</span>
+								</text>
+							))}
+						</box>
+					</box>
 				</box>
 			) : null}
 			{showHelp ? (
