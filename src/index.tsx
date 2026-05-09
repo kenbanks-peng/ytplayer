@@ -762,6 +762,7 @@ function App() {
                 backgroundColor="transparent"
                 focusedBackgroundColor="transparent"
                 selectedBackgroundColor={theme.bgRowSelected}
+                selectedTextColor={theme.textRowSelected}
                 showDescription={false}
                 selectedIndex={selectedIndex}
                 onChange={(i: number) => setSelectedIndex(i)}
@@ -817,6 +818,7 @@ function App() {
               backgroundColor="transparent"
               focusedBackgroundColor="transparent"
               selectedBackgroundColor={theme.bgRowSelected}
+              selectedTextColor={theme.textRowSelected}
               showDescription={false}
               selectedIndex={Math.min(
                 playlistSelected,

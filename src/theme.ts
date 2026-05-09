@@ -34,17 +34,20 @@ function mix(a: string, b: string, t: number): string {
   return `#${ch(1)}${ch(3)}${ch(5)}`;
 }
 
+const accent = palette.blue;
+
 // Semantic tokens. UI code references these names, never raw colors.
 export const theme = {
   bg: palette.base,
-  bgFocus: mix(palette.pureGreen, palette.base, 0.05),
-  bgRowSelected: mix(palette.pureGreen, palette.base, 0.2),
+  bgFocus: mix(accent, palette.base, 0.08),
+  bgRowSelected: mix(accent, palette.base, 1),
+  textRowSelected: palette.base,
   border: palette.subtext1,
-  borderFocus: palette.green,
+  borderFocus: accent,
   text: palette.text,
   textMuted: palette.subtext0,
   textSubtle: palette.overlay0,
-  accent: palette.blue,
+  accent,
   keyHint: palette.sky,
   playing: palette.green,
   paused: palette.yellow,
