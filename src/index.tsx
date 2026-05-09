@@ -739,7 +739,13 @@ function App() {
 			const i = cur.findIndex((t) => t.id === id);
 			if (i < 0) return cur;
 			const next = cur.filter((t) => t.id !== id);
-			setPlaylistDirty(true);
+			if (next.length === 0) {
+				setPlaylistDirty(false);
+				setPlaylistName(null);
+				saveActiveAssoc(null);
+			} else {
+				setPlaylistDirty(true);
+			}
 			setQueueIndex((idx) => {
 				if (idx < 0) return idx;
 				if (i < idx) return idx - 1;
