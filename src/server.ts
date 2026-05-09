@@ -373,6 +373,7 @@ export async function runServer(): Promise<void> {
 				};
 			case "queue:add": {
 				if (!req.track) return { ok: false, error: "missing track" };
+				if (queue.some((t) => t.id === req.track.id)) return { ok: true };
 				const modeChanged = req.mode && req.mode !== mode;
 				if (req.mode) mode = req.mode;
 				queue.push(req.track);

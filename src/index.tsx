@@ -471,16 +471,14 @@ function App() {
 			setShowHelp(false);
 			return;
 		}
-		if (key.name === "tab" || (key.name === "l" && focus !== "search")) {
+		if (key.name === "tab") {
 			setFocus((f) =>
 				f === "search" ? "results" : f === "results" ? "playlist" : "search",
 			);
 			return;
 		}
-		if (key.name === "h" && focus !== "search") {
-			setFocus((f) =>
-				f === "search" ? "playlist" : f === "playlist" ? "results" : "search",
-			);
+		if ((key.name === "h" || key.name === "l") && focus !== "search") {
+			setFocus((f) => (f === "results" ? "playlist" : "results"));
 			return;
 		}
 		if (focus === "playlist" && queue.length > 0) {
