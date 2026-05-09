@@ -359,11 +359,11 @@ function App() {
 
 	useEffect(() => {
 		scrollCursorIntoView(resultsScrollRef.current, selectedIndex);
-	}, [selectedIndex, results.length]);
+	}, [selectedIndex]);
 
 	useEffect(() => {
 		scrollCursorIntoView(playlistScrollRef.current, playlistSelected);
-	}, [playlistSelected, queue.length]);
+	}, [playlistSelected]);
 
 	const doSearch = async (q: string = query) => {
 		if (!q.trim() || searching) return;
@@ -717,8 +717,6 @@ function App() {
 	const viewsW = 7;
 	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
 	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
-
-	const nowId = now?.id ?? null;
 
 	const plDurW = 6;
 	const plTitleW = Math.max(10, playlistW - plDurW - 6);
