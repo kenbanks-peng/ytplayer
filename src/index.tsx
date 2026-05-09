@@ -1274,11 +1274,12 @@ function App() {
 							))}
 						</box>
 						<box flexDirection="column" flexGrow={1}>
-							{(
-								[
-									["↑ ↓ / j k", "navigate list"],
-									["Esc", "close"],
-								] as [string, string][]
+							{(plModalFocus === "list"
+								? ([
+										["↑ ↓ / j k", "navigate list"],
+										["Esc", "close"],
+									] as [string, string][])
+								: ([["Esc", "close"]] as [string, string][])
 							).map(([k, h]) => (
 								<text key={k}>
 									<span fg={theme.keyHint}>{fitCol(k, 12)}</span>
