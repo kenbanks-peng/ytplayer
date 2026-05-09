@@ -1062,7 +1062,7 @@ function App() {
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
 	const plPrefix = `${playlistUnsaved ? "* " : ""}Playlist`;
-	const plCountSuffix = ` (${queue.length}) `;
+	const plCountSuffix = queue.length > 0 ? ` (${queue.length}) ` : " ";
 	const plNameBudget = Math.max(
 		0,
 		playlistW - 4 - displayWidth(plPrefix) - 2 - displayWidth(plCountSuffix),
