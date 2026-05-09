@@ -585,7 +585,7 @@ function App() {
 	const resultsW = Math.floor(inner * 0.6);
 	const playlistW = inner - resultsW;
 
-	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
+	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} • ? `;
 	const topInner = Math.max(0, termWidth - 4);
 	const leftLabel = " YouTube Player ";
 	const gap = Math.max(1, topInner - leftLabel.length - modeLabel.length - 4);
