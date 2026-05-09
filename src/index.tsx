@@ -688,7 +688,7 @@ function App() {
       padding={1}
       backgroundColor={theme.bg}
     >
-      <box flexDirection="row">
+      <box flexDirection="row" minHeight={7} flexShrink={0}>
         <box
           flexGrow={1}
           flexBasis={resultsW}
