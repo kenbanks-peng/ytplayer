@@ -546,8 +546,10 @@ function App() {
 		setPlEntries(entries);
 		setPlName(playlistName ?? "");
 		setPlDeleteArmedSlug(null);
+		const unsaved =
+			playlistDirty || (playlistName === null && queue.length > 0);
 		const initialFocus: "input" | "list" =
-			entries.length > 0 ? "list" : "input";
+			unsaved || entries.length === 0 ? "input" : "list";
 		setPlModalFocus(initialFocus);
 		const cur = playlistName
 			? entries.findIndex((e) => e.name === playlistName)
@@ -1117,7 +1119,14 @@ function App() {
 					border
 					borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
 					backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
-					title={` ${playlistName ? `Playlist: ${playlistName}${playlistDirty ? " *" : ""}` : "Playlist"} (${queue.length}) `}
+					title={(() => {
+						const unsaved =
+							playlistDirty || (playlistName === null && queue.length > 0);
+						const body = playlistName
+							? `Playlist: ${playlistName}`
+							: "Playlist";
+						return ` ${unsaved ? "* " : ""}${body} (${queue.length}) `;
+					})()}
 					onMouseDown={() => setFocus("playlist")}
 				>
 					{queue.length > 0 ? (
