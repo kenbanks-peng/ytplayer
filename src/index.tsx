@@ -232,7 +232,7 @@ function scrollCursorIntoView(
 const HELP_LEFT: [string, string][] = [
 	["Tab", "cycle focus"],
 	["Enter", "add (results) / jump (playlist)"],
-	["p", "preview result (no queue add)"],
+	["i", "instant play"],
 	["d", "remove from playlist"],
 	["[ / ]", "move playlist item up/down"],
 	["x", "shuffle queue"],
@@ -596,7 +596,7 @@ function App() {
 			if (t) spawn(["open", t.url], { stdout: "ignore", stderr: "ignore" });
 			return;
 		}
-		if (key.name === "p" && focus === "results") {
+		if (key.name === "i" && focus === "results") {
 			const t = results[selectedIndex];
 			if (t) previewFromResults(t);
 			return;
