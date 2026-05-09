@@ -441,6 +441,11 @@ function App() {
 			if (t) removeFromQueue(t.id);
 			return;
 		}
+		if (key.name === "d" && focus === "results") {
+			const t = results[selectedIndex];
+			if (t && queue.some((q) => q.id === t.id)) removeFromQueue(t.id);
+			return;
+		}
 		if (key.name === "x" && focus !== "search") {
 			queueShuffle();
 			return;
