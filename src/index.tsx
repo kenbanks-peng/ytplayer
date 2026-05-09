@@ -414,7 +414,12 @@ function App() {
 			return;
 		}
 		if ((key.name === "n" || key.name === "pagedown") && focus !== "search") {
-			loadMore();
+			const q = query.trim();
+			if (q && q !== lastQueryRef.current) {
+				doSearch(q);
+			} else {
+				loadMore();
+			}
 			return;
 		}
 		if (
@@ -560,11 +565,6 @@ function App() {
 	return (
 		<box flexDirection="column" flexGrow={1} padding={1}>
 			<box flexDirection="column" border title={topTitle} padding={1}>
-				<box flexDirection="row" justifyContent="flex-end">
-					<text fg={theme.textMuted}>
-						{results.length > 0 ? `${results.length} results` : ""}
-					</text>
-				</box>
 				{now ? (
 					<>
 						<text>
@@ -606,7 +606,7 @@ function App() {
 					backgroundColor={
 						focus === "results" ? theme.surfaceOverlay : theme.surface
 					}
-					title={` Results ${searching ? "(searching...)" : ""} `}
+					title={` Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `}
 				>
 					{options.length > 0 ? (
 						<>
@@ -688,7 +688,12 @@ function App() {
 					onSubmit={(value) => {
 						const v = typeof value === "string" ? value : query;
 						setQuery(v);
-						doSearch(v);
+						const q = v.trim();
+						if (q && q === lastQueryRef.current) {
+							loadMore();
+						} else {
+							doSearch(v);
+						}
 					}}
 					placeholder="artist, song, album..."
 					focused={focus === "search"}
