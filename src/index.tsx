@@ -1082,7 +1082,7 @@ function App() {
 	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
 	const plDurW = 6;
-	const plTitleW = Math.max(10, playlistW - plDurW - 7);
+	const plTitleW = Math.max(10, playlistW - plDurW - 6);
 
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
@@ -1262,45 +1262,53 @@ function App() {
 					onMouseDown={() => setFocus("playlist")}
 				>
 					{queue.length > 0 ? (
-						<scrollbox
-							ref={playlistScrollRef}
-							flexGrow={1}
-							rootOptions={{ backgroundColor: "transparent" }}
-							wrapperOptions={{ backgroundColor: "transparent" }}
-							viewportOptions={{ backgroundColor: "transparent" }}
-							contentOptions={{ backgroundColor: "transparent" }}
-						>
-							{queue.map((t, i) => {
-								const isPlaying = i === queueIndex && playing;
-								const isCursor = i === playlistSelected && focus === "playlist";
-								const title = fitCol(t.title.normalize("NFKC"), plTitleW);
-								const duration = fmtDur(t.duration).padStart(plDurW, " ");
-								return (
-									<text
-										key={t.id}
-										id={`playlist-row-${t.id}`}
-										wrapMode="none"
-										bg={
-											isPlaying
-												? theme.bgPlaying
-												: isCursor
-													? theme.bgRowSelected
+						<>
+							<text fg={theme.textMuted}>
+								{`  ${fitCol("Title", plTitleW)} ${"Length".padStart(plDurW, " ")}`}
+							</text>
+							<scrollbox
+								ref={playlistScrollRef}
+								flexGrow={1}
+								rootOptions={{ backgroundColor: "transparent" }}
+								wrapperOptions={{ backgroundColor: "transparent" }}
+								viewportOptions={{ backgroundColor: "transparent" }}
+								contentOptions={{ backgroundColor: "transparent" }}
+							>
+								{queue.map((t, i) => {
+									const isPlaying = i === queueIndex && playing;
+									const isCursor =
+										i === playlistSelected && focus === "playlist";
+									const title = fitCol(t.title.normalize("NFKC"), plTitleW);
+									const duration = fmtDur(t.duration).padStart(plDurW, " ");
+									return (
+										<text
+											key={t.id}
+											id={`playlist-row-${t.id}`}
+											wrapMode="none"
+											bg={
+												isPlaying
+													? theme.bgPlaying
+													: isCursor
+														? theme.bgRowSelected
+														: undefined
+											}
+											fg={
+												isPlaying || isCursor
+													? theme.textRowSelected
 													: undefined
-										}
-										fg={
-											isPlaying || isCursor ? theme.textRowSelected : undefined
-										}
-										onMouseDown={() => {
-											setFocus("playlist");
-											setPlaylistSelected(i);
-											jumpInQueue(i);
-										}}
-									>
-										{`${isCursor ? "▶ " : "  "}${title}  ${duration}`}
-									</text>
-								);
-							})}
-						</scrollbox>
+											}
+											onMouseDown={() => {
+												setFocus("playlist");
+												setPlaylistSelected(i);
+												jumpInQueue(i);
+											}}
+										>
+											{`${isCursor ? "▶ " : "  "}${title} ${duration}`}
+										</text>
+									);
+								})}
+							</scrollbox>
+						</>
 					) : (
 						<box padding={1}>
 							<text fg={theme.textMuted}>Empty. Enter on a result to add.</text>
