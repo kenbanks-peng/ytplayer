@@ -1082,7 +1082,7 @@ function App() {
 	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
 	const plDurW = 6;
-	const plTitleW = Math.max(10, playlistW - plDurW - 6);
+	const plTitleW = Math.max(10, playlistW - plDurW - 5);
 
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
@@ -1199,7 +1199,7 @@ function App() {
 				>
 					{results.length > 0 ? (
 						<>
-							<text fg={theme.textMuted}>
+							<text fg={theme.textMuted} wrapMode="none">
 								{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
 							</text>
 							<scrollbox
@@ -1263,7 +1263,7 @@ function App() {
 				>
 					{queue.length > 0 ? (
 						<>
-							<text fg={theme.textMuted}>
+							<text fg={theme.textMuted} wrapMode="none">
 								{`  ${fitCol("Title", plTitleW)} ${"Length".padStart(plDurW, " ")}`}
 							</text>
 							<scrollbox
