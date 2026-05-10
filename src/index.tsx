@@ -296,7 +296,10 @@ function clip(s: string, width: number): string {
 	return acc;
 }
 
-const PAGE_SIZE = 20;
+const MIN_PAGE_SIZE = 20;
+// Vertical chrome above the results scrollbox: outer padding(2) + top row(4)
+// + results border(2) + header(1) ≈ 9 rows.
+const RESULTS_VERTICAL_CHROME = 9;
 
 async function searchYouTube(
 	query: string,
@@ -432,6 +435,12 @@ function App() {
 	const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const playlistScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const { width: termWidth, height: termHeight } = useTerminalDimensions();
+	const pageSize = Math.max(
+		MIN_PAGE_SIZE,
+		termHeight - RESULTS_VERTICAL_CHROME,
+	);
+	const pageSizeRef = useRef(pageSize);
+	pageSizeRef.current = pageSize;
 
 	useEffect(() => {
 		if (focus === "search") inputRef.current?.focus();
@@ -557,7 +566,7 @@ function App() {
 		setSearching(true);
 		setError(null);
 		try {
-			const tracks = await searchYouTube(q, PAGE_SIZE, 1, ac.signal);
+			const tracks = await searchYouTube(q, pageSizeRef.current, 1, ac.signal);
 			lastQueryRef.current = q;
 			const sorted = sortByViewsDesc(tracks);
 			setResults(sorted);
@@ -575,7 +584,7 @@ function App() {
 		const q = lastQueryRef.current;
 		if (!q || searching) return;
 		const have = results.length;
-		const target = have + PAGE_SIZE;
+		const target = have + pageSizeRef.current;
 		abortRef.current?.abort();
 		const ac = new AbortController();
 		abortRef.current = ac;
