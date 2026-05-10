@@ -1043,10 +1043,7 @@ function App() {
 	const searchW = playlistW;
 	const topPanelInner = Math.max(0, termWidth - searchW - 6);
 	const leftLabel = " YouTube Player ";
-	const gap = Math.max(
-		1,
-		topPanelInner - leftLabel.length - modeLabel.length - 1,
-	);
+	const gap = Math.max(1, topPanelInner - leftLabel.length - modeLabel.length);
 	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
 
 	const searchLeftLabel = " Search ";
