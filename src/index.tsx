@@ -1039,13 +1039,13 @@ function App() {
 	const resultsW = Math.floor(inner * 0.6);
 	const playlistW = inner - resultsW;
 
-	const modeLabel = ` ${mode.toUpperCase()}${repeat ? " • REPEAT" : ""} `;
+	const modeLabel = ` ${repeat ? "REPEAT • " : ""}${mode.toUpperCase()} `;
 	const searchW = playlistW;
 	const topPanelInner = Math.max(0, termWidth - searchW - 6);
 	const leftLabel = " YouTube Player ";
 	const gap = Math.max(
 		1,
-		topPanelInner - leftLabel.length - modeLabel.length - 4,
+		topPanelInner - leftLabel.length - modeLabel.length - 1,
 	);
 	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
 
