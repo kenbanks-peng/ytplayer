@@ -70,6 +70,13 @@ const ACTIVE_FILE = join(CACHE_DIR, "active.json");
 
 type ActiveAssoc = { name: string; trackIds: string[] };
 
+function sameTrackIdSet(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false;
+	const set = new Set(a);
+	for (const id of b) if (!set.has(id)) return false;
+	return true;
+}
+
 function saveActiveAssoc(assoc: ActiveAssoc | null) {
 	try {
 		mkdirSync(CACHE_DIR, { recursive: true });
@@ -166,8 +173,10 @@ function findPlaylistMatchingTrackIds(
 				const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
 				const tracks = Array.isArray(j.tracks) ? j.tracks : [];
 				if (
-					tracks.length === trackIds.length &&
-					tracks.every((t, i) => t.id === trackIds[i])
+					sameTrackIdSet(
+						tracks.map((t) => t.id),
+						trackIds,
+					)
 				) {
 					const slug = file.slice(0, -5);
 					const name = typeof j.name === "string" ? j.name : slug;
@@ -420,7 +429,15 @@ function App() {
 	const [playlistSelected, setPlaylistSelected] = useState(0);
 	const [showHelp, setShowHelp] = useState(false);
 	const [playlistName, setPlaylistName] = useState<string | null>(null);
-	const [playlistDirty, setPlaylistDirty] = useState(false);
+	const [baselineTrackIds, setBaselineTrackIds] = useState<string[] | null>(
+		null,
+	);
+	const playlistDirty =
+		baselineTrackIds !== null &&
+		!sameTrackIdSet(
+			queue.map((t) => t.id),
+			baselineTrackIds,
+		);
 	const [showPlaylists, setShowPlaylists] = useState(false);
 	const [plEntries, setPlEntries] = useState<PlaylistEntry[]>([]);
 	const [plModalFocus, setPlModalFocus] = useState<"input" | "list">("list");
@@ -482,19 +499,14 @@ function App() {
 					const assoc = loadActiveAssoc();
 					if (assoc) {
 						setPlaylistName(assoc.name);
-						const same =
-							q.length === assoc.trackIds.length &&
-							q.every((t, i) => t.id === assoc.trackIds[i]);
-						setPlaylistDirty(!same);
+						setBaselineTrackIds(assoc.trackIds);
 					} else {
 						const match = findPlaylistMatchingTrackIds(q.map((t) => t.id));
 						if (match) {
 							setPlaylistName(match.name);
-							setPlaylistDirty(false);
-							saveActiveAssoc({
-								name: match.name,
-								trackIds: q.map((t) => t.id),
-							});
+							const ids = q.map((t) => t.id);
+							setBaselineTrackIds(ids);
+							saveActiveAssoc({ name: match.name, trackIds: ids });
 						}
 					}
 				}
@@ -613,7 +625,6 @@ function App() {
 	const addToQueue = async (t: Track) => {
 		setQueue((cur) => {
 			if (cur.some((q) => q.id === t.id)) return cur;
-			setPlaylistDirty(true);
 			return [...cur, t];
 		});
 		await queueAdd(t);
@@ -672,8 +683,9 @@ function App() {
 			if (oldSlug !== slug) deletePlaylist(oldSlug);
 		}
 		setPlaylistName(name);
-		setPlaylistDirty(false);
-		saveActiveAssoc({ name, trackIds: queue.map((t) => t.id) });
+		const ids = queue.map((t) => t.id);
+		setBaselineTrackIds(ids);
+		saveActiveAssoc({ name, trackIds: ids });
 		const refreshed = listPlaylists();
 		setPlEntries(refreshed);
 		const i = refreshed.findIndex((e) => e.slug === slug);
@@ -686,16 +698,15 @@ function App() {
 		if (!data) {
 			return;
 		}
-		const sameTracks =
-			queue.length === data.tracks.length &&
-			queue.every((t, i) => t.id === data.tracks[i]?.id);
+		const sameTracks = sameTrackIdSet(
+			queue.map((t) => t.id),
+			data.tracks.map((t) => t.id),
+		);
+		const ids = data.tracks.map((t) => t.id);
 		if (sameTracks) {
 			setPlaylistName(data.name);
-			setPlaylistDirty(false);
-			saveActiveAssoc({
-				name: data.name,
-				trackIds: data.tracks.map((t) => t.id),
-			});
+			setBaselineTrackIds(ids);
+			saveActiveAssoc({ name: data.name, trackIds: ids });
 			closePlaylistModal();
 			return;
 		}
@@ -707,11 +718,8 @@ function App() {
 		setPaused(false);
 		setPlaylistSelected(0);
 		setPlaylistName(data.name);
-		setPlaylistDirty(false);
-		saveActiveAssoc({
-			name: data.name,
-			trackIds: data.tracks.map((t) => t.id),
-		});
+		setBaselineTrackIds(ids);
+		saveActiveAssoc({ name: data.name, trackIds: ids });
 		closePlaylistModal();
 	};
 
@@ -727,7 +735,7 @@ function App() {
 		}
 		if (playlistName === entry.name) {
 			setPlaylistName(null);
-			setPlaylistDirty(queue.length > 0);
+			setBaselineTrackIds(null);
 			saveActiveAssoc(null);
 		}
 		const refreshed = listPlaylists();
@@ -743,11 +751,9 @@ function App() {
 			if (i < 0) return cur;
 			const next = cur.filter((t) => t.id !== id);
 			if (next.length === 0) {
-				setPlaylistDirty(false);
+				setBaselineTrackIds(null);
 				setPlaylistName(null);
 				saveActiveAssoc(null);
-			} else {
-				setPlaylistDirty(true);
 			}
 			setQueueIndex((idx) => {
 				if (idx < 0) return idx;
@@ -948,7 +954,7 @@ function App() {
 			setQueueIndex(-1);
 			setPlaylistSelected(0);
 			setPlaylistName(null);
-			setPlaylistDirty(false);
+			setBaselineTrackIds(null);
 			saveActiveAssoc(null);
 			return;
 		}
@@ -973,7 +979,6 @@ function App() {
 					return idx;
 				});
 				setPlaylistSelected(to);
-				setPlaylistDirty(true);
 				queueMove(from, to);
 			}
 			return;
@@ -999,7 +1004,6 @@ function App() {
 					return idx;
 				});
 				setPlaylistSelected(to);
-				setPlaylistDirty(true);
 				queueMove(from, to);
 			}
 			return;
