@@ -431,7 +431,7 @@ function App() {
 	const plInputRef = useRef<InputRenderable | null>(null);
 	const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const playlistScrollRef = useRef<ScrollBoxRenderable | null>(null);
-	const { width: termWidth } = useTerminalDimensions();
+	const { width: termWidth, height: termHeight } = useTerminalDimensions();
 
 	useEffect(() => {
 		if (focus === "search") inputRef.current?.focus();
@@ -1005,6 +1005,25 @@ function App() {
 			return;
 		}
 	});
+
+	const MIN_WIDTH = 80;
+	const MIN_HEIGHT = 20;
+	if (termWidth < MIN_WIDTH || termHeight < MIN_HEIGHT) {
+		return (
+			<box
+				flexDirection="column"
+				flexGrow={1}
+				backgroundColor={theme.bg}
+				justifyContent="center"
+				alignItems="center"
+			>
+				<text fg={theme.text}>YouTube Player</text>
+				<text fg={theme.textMuted}>
+					Terminal too small (min {MIN_WIDTH}x{MIN_HEIGHT})
+				</text>
+			</box>
+		);
+	}
 
 	// Layout: results pane gets ~60%, playlist pane ~40%.
 	const inner = Math.max(52, termWidth - 8);
