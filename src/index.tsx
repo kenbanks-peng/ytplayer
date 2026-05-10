@@ -911,7 +911,6 @@ function App() {
 		}
 		if (key.name === "x" && focus !== "search") {
 			queueShuffle();
-			if (queue.length > 1) setPlaylistDirty(true);
 			return;
 		}
 		if (key.name === "y" && focus !== "search") {
