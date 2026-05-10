@@ -1,34 +1,16 @@
-import {
-	existsSync,
-	mkdirSync,
-	openSync,
-	readFileSync,
-	statSync,
-	unlinkSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, openSync, unlinkSync } from "node:fs";
 import { connect, createServer, type Socket } from "node:net";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { type Subprocess, spawn } from "bun";
+import { ensureDir, loadJson, saveOrUnlink } from "./jsonFile";
 import {
-	type PlayMode,
-	PROTOCOL_VERSION,
+	CACHE_DIR,
+	MPV_LOG,
+	MPV_SOCK,
+	RPC_TIMEOUT_MS,
 	SERVER_SOCK,
-	type Track,
-} from "./protocol";
-
-const MPV_SOCK = "/tmp/ytplayer-mpv.sock";
-
-export function binaryVersion(): string {
-	let mtime = "0";
-	try {
-		mtime = String(statSync(process.execPath).mtimeMs);
-	} catch {}
-	return `${PROTOCOL_VERSION}:${mtime}`;
-}
-const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
-const STATE_FILE = join(CACHE_DIR, "state.json");
+	STATE_FILE,
+} from "./paths";
+import { binaryVersion, type PlayMode, type Track } from "./protocol";
 
 type PersistedState = {
 	queue: Track[];
@@ -37,25 +19,11 @@ type PersistedState = {
 	mode: PlayMode;
 };
 
-function saveStateFile(s: PersistedState) {
-	try {
-		mkdirSync(CACHE_DIR, { recursive: true });
-		if (s.queue.length === 0 && !s.repeat) {
-			if (existsSync(STATE_FILE)) unlinkSync(STATE_FILE);
-		} else {
-			writeFileSync(STATE_FILE, JSON.stringify(s));
-		}
-	} catch {}
-}
+const saveStateFile = (s: PersistedState) =>
+	saveOrUnlink(STATE_FILE, s.queue.length === 0 && !s.repeat ? null : s);
 
-function loadStateFile(): PersistedState | null {
-	try {
-		if (!existsSync(STATE_FILE)) return null;
-		return JSON.parse(readFileSync(STATE_FILE, "utf8")) as PersistedState;
-	} catch {
-		return null;
-	}
-}
+const loadStateFile = (): PersistedState | null =>
+	loadJson<PersistedState>(STATE_FILE);
 
 type Request =
 	| { cmd: "ping" }
@@ -111,7 +79,7 @@ export async function runServer(): Promise<void> {
 		return new Promise((resolve) => {
 			const timer = setTimeout(() => {
 				if (pending.delete(id)) resolve(null);
-			}, 2000);
+			}, RPC_TIMEOUT_MS);
 			pending.set(id, (v) => {
 				clearTimeout(timer);
 				resolve(v);
@@ -240,8 +208,8 @@ export async function runServer(): Promise<void> {
 		];
 		let logFd: number;
 		try {
-			mkdirSync(CACHE_DIR, { recursive: true });
-			logFd = openSync(join(CACHE_DIR, "mpv.log"), "a");
+			ensureDir(CACHE_DIR);
+			logFd = openSync(MPV_LOG, "a");
 		} catch {
 			logFd = 2;
 		}

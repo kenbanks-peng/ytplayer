@@ -1,14 +1,4 @@
 import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	unlinkSync,
-	writeFileSync,
-} from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import {
 	createCliRenderer,
 	type InputRenderable,
 	type ScrollBoxRenderable,
@@ -16,6 +6,12 @@ import {
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { type Subprocess, spawn } from "bun";
 import { useEffect, useRef, useState } from "react";
+import {
+	loadActiveAssoc,
+	loadSearch,
+	saveActiveAssoc,
+	saveSearch,
+} from "./cache";
 import {
 	ensureServer,
 	getState,
@@ -36,8 +32,18 @@ import {
 	stopPlayback,
 	togglePause,
 } from "./client";
+import {
+	deletePlaylist,
+	findPlaylistMatchingTrackIds,
+	listPlaylists,
+	loadPlaylist,
+	type PlaylistEntry,
+	sameTrackIdSet,
+	savePlaylist,
+} from "./playlists";
 import type { PlayMode, Track } from "./protocol";
 import { runServer } from "./server";
+import { clip, displayWidth, fitCol, fmtCount, fmtDur, slugify } from "./text";
 import { theme } from "./theme";
 
 if (process.argv.includes("server")) {
@@ -54,257 +60,6 @@ const pageMarker = (page: number): string =>
 function sortByViewsDesc(tracks: Track[]): Track[] {
 	return [...tracks].sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
 }
-
-function fmtCount(n?: number): string {
-	if (n == null || !Number.isFinite(n)) return "";
-	if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-	return String(n);
-}
-
-const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
-const SEARCH_FILE = join(CACHE_DIR, "search.json");
-const PLAYLIST_DIR = join(CACHE_DIR, "playlists");
-const ACTIVE_FILE = join(CACHE_DIR, "active.json");
-
-type ActiveAssoc = { name: string; trackIds: string[] };
-
-function sameTrackIdSet(a: string[], b: string[]): boolean {
-	if (a.length !== b.length) return false;
-	const set = new Set(a);
-	for (const id of b) if (!set.has(id)) return false;
-	return true;
-}
-
-function saveActiveAssoc(assoc: ActiveAssoc | null) {
-	try {
-		mkdirSync(CACHE_DIR, { recursive: true });
-		if (assoc) {
-			writeFileSync(ACTIVE_FILE, JSON.stringify(assoc));
-		} else if (existsSync(ACTIVE_FILE)) {
-			unlinkSync(ACTIVE_FILE);
-		}
-	} catch {}
-}
-
-function loadActiveAssoc(): ActiveAssoc | null {
-	try {
-		if (!existsSync(ACTIVE_FILE)) return null;
-		const j = JSON.parse(readFileSync(ACTIVE_FILE, "utf8")) as ActiveAssoc;
-		if (typeof j.name !== "string" || !Array.isArray(j.trackIds)) return null;
-		return j;
-	} catch {
-		return null;
-	}
-}
-
-type SearchCache = { query: string; results: Track[] };
-
-type PlaylistEntry = { name: string; slug: string; count: number };
-
-function slugify(name: string): string {
-	const s = name
-		.normalize("NFKC")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
-	return s || "untitled";
-}
-
-function listPlaylists(): PlaylistEntry[] {
-	try {
-		if (!existsSync(PLAYLIST_DIR)) return [];
-		const files = readdirSync(PLAYLIST_DIR).filter((f) => f.endsWith(".json"));
-		const entries: PlaylistEntry[] = [];
-		for (const file of files) {
-			try {
-				const raw = readFileSync(join(PLAYLIST_DIR, file), "utf8");
-				const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
-				const name = typeof j.name === "string" ? j.name : file.slice(0, -5);
-				const tracks = Array.isArray(j.tracks) ? j.tracks : [];
-				entries.push({ name, slug: file.slice(0, -5), count: tracks.length });
-			} catch {}
-		}
-		entries.sort((a, b) => a.name.localeCompare(b.name));
-		return entries;
-	} catch {
-		return [];
-	}
-}
-
-function savePlaylist(name: string, tracks: Track[]): string | null {
-	const trimmed = name.trim();
-	if (!trimmed) return null;
-	try {
-		mkdirSync(PLAYLIST_DIR, { recursive: true });
-		const slug = slugify(trimmed);
-		writeFileSync(
-			join(PLAYLIST_DIR, `${slug}.json`),
-			JSON.stringify({ name: trimmed, tracks }),
-		);
-		return slug;
-	} catch {
-		return null;
-	}
-}
-
-function loadPlaylist(slug: string): { name: string; tracks: Track[] } | null {
-	try {
-		const raw = readFileSync(join(PLAYLIST_DIR, `${slug}.json`), "utf8");
-		const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
-		const tracks = Array.isArray(j.tracks) ? j.tracks : [];
-		const name = typeof j.name === "string" ? j.name : slug;
-		return { name, tracks };
-	} catch {
-		return null;
-	}
-}
-
-function findPlaylistMatchingTrackIds(
-	trackIds: string[],
-): { name: string; slug: string } | null {
-	try {
-		if (!existsSync(PLAYLIST_DIR)) return null;
-		const files = readdirSync(PLAYLIST_DIR).filter((f) => f.endsWith(".json"));
-		for (const file of files) {
-			try {
-				const raw = readFileSync(join(PLAYLIST_DIR, file), "utf8");
-				const j = JSON.parse(raw) as { name?: string; tracks?: Track[] };
-				const tracks = Array.isArray(j.tracks) ? j.tracks : [];
-				if (
-					sameTrackIdSet(
-						tracks.map((t) => t.id),
-						trackIds,
-					)
-				) {
-					const slug = file.slice(0, -5);
-					const name = typeof j.name === "string" ? j.name : slug;
-					return { name, slug };
-				}
-			} catch {}
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
-
-function deletePlaylist(slug: string): boolean {
-	try {
-		const path = join(PLAYLIST_DIR, `${slug}.json`);
-		if (existsSync(path)) unlinkSync(path);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function saveSearch(cache: SearchCache | null) {
-	try {
-		mkdirSync(CACHE_DIR, { recursive: true });
-		if (cache && cache.results.length > 0) {
-			writeFileSync(SEARCH_FILE, JSON.stringify(cache));
-		} else if (existsSync(SEARCH_FILE)) {
-			unlinkSync(SEARCH_FILE);
-		}
-	} catch {}
-}
-
-function loadSearch(): SearchCache | null {
-	try {
-		if (!existsSync(SEARCH_FILE)) return null;
-		return JSON.parse(readFileSync(SEARCH_FILE, "utf8")) as SearchCache;
-	} catch {
-		return null;
-	}
-}
-
-function fmtDur(s?: number) {
-	if (!s || !Number.isFinite(s)) return "--:--";
-	const m = Math.floor(s / 60);
-	const sec = Math.floor(s % 60);
-	return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function charWidth(cp: number): number {
-	if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return 0;
-	// Combining marks, zero-width joiners, variation selectors.
-	if (
-		(cp >= 0x0300 && cp <= 0x036f) ||
-		(cp >= 0x200b && cp <= 0x200f) ||
-		cp === 0x200d ||
-		(cp >= 0xfe00 && cp <= 0xfe0f) ||
-		(cp >= 0xe0100 && cp <= 0xe01ef)
-	) {
-		return 0;
-	}
-	// Wide ranges: CJK, hangul, kana, fullwidth, most emoji.
-	if (
-		(cp >= 0x1100 && cp <= 0x115f) ||
-		(cp >= 0x2e80 && cp <= 0x303e) ||
-		(cp >= 0x3041 && cp <= 0x33ff) ||
-		(cp >= 0x3400 && cp <= 0x4dbf) ||
-		(cp >= 0x4e00 && cp <= 0x9fff) ||
-		(cp >= 0xa000 && cp <= 0xa4cf) ||
-		(cp >= 0xac00 && cp <= 0xd7a3) ||
-		(cp >= 0xf900 && cp <= 0xfaff) ||
-		(cp >= 0xfe30 && cp <= 0xfe4f) ||
-		(cp >= 0xff00 && cp <= 0xff60) ||
-		(cp >= 0xffe0 && cp <= 0xffe6) ||
-		(cp >= 0x1f300 && cp <= 0x1faff) ||
-		(cp >= 0x20000 && cp <= 0x2fffd) ||
-		(cp >= 0x30000 && cp <= 0x3fffd)
-	) {
-		return 2;
-	}
-	return 1;
-}
-
-function displayWidth(s: string): number {
-	let w = 0;
-	for (const ch of s) w += charWidth(ch.codePointAt(0) ?? 0);
-	return w;
-}
-
-function fitCol(s: string, width: number): string {
-	if (width <= 0) return "";
-	const w = displayWidth(s);
-	if (w === width) return s;
-	if (w < width) return s + " ".repeat(width - w);
-	const reserve = width <= 1 ? 0 : 1;
-	let acc = "";
-	let aw = 0;
-	for (const ch of s) {
-		const cw = charWidth(ch.codePointAt(0) ?? 0);
-		if (aw + cw > width - reserve) break;
-		acc += ch;
-		aw += cw;
-	}
-	if (reserve) {
-		acc += "…";
-		aw += 1;
-	}
-	if (aw < width) acc += " ".repeat(width - aw);
-	return acc;
-}
-
-function clip(s: string, width: number): string {
-	if (width <= 0) return "";
-	if (displayWidth(s) <= width) return s;
-	const reserve = width <= 1 ? 0 : 1;
-	let acc = "";
-	let aw = 0;
-	for (const ch of s) {
-		const cw = charWidth(ch.codePointAt(0) ?? 0);
-		if (aw + cw > width - reserve) break;
-		acc += ch;
-		aw += cw;
-	}
-	if (reserve) acc += "…";
-	return acc;
-}
-
 const MIN_PAGE_SIZE = 20;
 // Vertical chrome above the results scrollbox: outer padding(2) + top row(4)
 // + results border(2) + header(1) ≈ 9 rows.

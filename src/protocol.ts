@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+
 export type Track = {
 	id: string;
 	title: string;
@@ -22,8 +24,16 @@ export type ServerState = {
 	duration: number;
 };
 
-export const SERVER_SOCK = "/tmp/ytplayer.sock";
-
 // Bump this whenever the wire protocol changes incompatibly. ensureServer()
 // compares it against the running server's reply to detect stale daemons.
-export const PROTOCOL_VERSION = "13";
+export const PROTOCOL_VERSION = "14";
+
+// Combines the wire protocol version with the executable's mtime so a fresh
+// build supersedes a running daemon even when the protocol is unchanged.
+export function binaryVersion(): string {
+	let mtime = "0";
+	try {
+		mtime = String(statSync(process.execPath).mtimeMs);
+	} catch {}
+	return `${PROTOCOL_VERSION}:${mtime}`;
+}

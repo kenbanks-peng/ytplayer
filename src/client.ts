@@ -1,46 +1,21 @@
 import { existsSync, openSync } from "node:fs";
-import { connect } from "node:net";
 import { spawn } from "bun";
 import {
-	type PlayMode,
+	PING_TIMEOUT_MS,
+	RPC_TIMEOUT_MS,
+	SERVER_LOG,
 	SERVER_SOCK,
+} from "./paths";
+import {
+	binaryVersion,
+	type PlayMode,
 	type ServerState,
 	type Track,
 } from "./protocol";
-import { binaryVersion } from "./server";
+import { sendJsonLine } from "./socketJson";
 
-const SERVER_LOG = "/tmp/ytplayer-server.log";
-
-function send<T = unknown>(req: unknown, timeoutMs = 2000): Promise<T | null> {
-	return new Promise((resolve) => {
-		if (!existsSync(SERVER_SOCK)) return resolve(null);
-		const sock = connect(SERVER_SOCK);
-		let buf = "";
-		let done = false;
-		const finish = (v: T | null) => {
-			if (done) return;
-			done = true;
-			clearTimeout(timer);
-			try {
-				sock.end();
-			} catch {}
-			resolve(v);
-		};
-		const timer = setTimeout(() => finish(null), timeoutMs);
-		sock.on("data", (d) => {
-			buf += d.toString();
-			const idx = buf.indexOf("\n");
-			if (idx >= 0) {
-				try {
-					finish(JSON.parse(buf.slice(0, idx)) as T);
-				} catch {
-					finish(null);
-				}
-			}
-		});
-		sock.on("error", () => finish(null));
-		sock.write(`${JSON.stringify(req)}\n`);
-	});
+function send<T = unknown>(req: unknown, timeoutMs = RPC_TIMEOUT_MS) {
+	return sendJsonLine<T>(SERVER_SOCK, req, timeoutMs);
 }
 
 export async function ensureServer(): Promise<void> {
@@ -48,7 +23,7 @@ export async function ensureServer(): Promise<void> {
 	if (existsSync(SERVER_SOCK)) {
 		const resp = await send<{ ok?: boolean; version?: string }>(
 			{ cmd: "ping" },
-			500,
+			PING_TIMEOUT_MS,
 		);
 		if (resp?.ok) {
 			if (resp.version === expected) return;
@@ -73,7 +48,7 @@ export async function ensureServer(): Promise<void> {
 	for (let i = 0; i < 50; i++) {
 		await new Promise((r) => setTimeout(r, 100));
 		if (!existsSync(SERVER_SOCK)) continue;
-		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, 500);
+		const resp = await send<{ ok?: boolean }>({ cmd: "ping" }, PING_TIMEOUT_MS);
 		if (resp?.ok) return;
 	}
 	throw new Error(`ytplayer server failed to start (see ${SERVER_LOG})`);
