@@ -1082,7 +1082,7 @@ function App() {
 	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
 
 	const plDurW = 6;
-	const plTitleW = Math.max(10, playlistW - plDurW - 6);
+	const plTitleW = Math.max(10, playlistW - plDurW - 7);
 
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
@@ -1224,6 +1224,7 @@ function App() {
 										<text
 											key={t.id}
 											id={`results-row-${t.id}`}
+											wrapMode="none"
 											bg={isCursor ? theme.bgRowSelected : undefined}
 											fg={isCursor ? theme.textRowSelected : undefined}
 											onMouseDown={() => {
@@ -1278,6 +1279,7 @@ function App() {
 									<text
 										key={t.id}
 										id={`playlist-row-${t.id}`}
+										wrapMode="none"
 										bg={
 											isPlaying
 												? theme.bgPlaying
