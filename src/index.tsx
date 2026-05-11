@@ -210,6 +210,7 @@ function App() {
 		null,
 	);
 	const abortRef = useRef<AbortController | null>(null);
+	const lastActionAtRef = useRef(0);
 	const inputRef = useRef<InputRenderable | null>(null);
 	const plInputRef = useRef<InputRenderable | null>(null);
 	const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
@@ -286,6 +287,8 @@ function App() {
 					const i = cachedSearch.results.findIndex((r) => r.id === nowId);
 					if (i >= 0) setSelectedIndex(i);
 				}
+			} else if (q.length === 0) {
+				setShowSearchModal(true);
 			}
 		})();
 
@@ -300,13 +303,18 @@ function App() {
 				}
 				return cur;
 			});
-			setQueueIndex(idx);
-			setPreview(state.preview ?? null);
-			setPaused(Boolean(state.paused));
+			const sinceAction = Date.now() - lastActionAtRef.current;
+			if (sinceAction > 1500) {
+				setQueueIndex(idx);
+				setPreview(state.preview ?? null);
+				setPaused(Boolean(state.paused));
+				setPosition(typeof state.position === "number" ? state.position : 0);
+				setTrackDuration(
+					typeof state.duration === "number" ? state.duration : 0,
+				);
+			}
 			setPlaying(Boolean(state.playing));
 			setRepeatState(Boolean(state.repeat));
-			setPosition(typeof state.position === "number" ? state.position : 0);
-			setTrackDuration(typeof state.duration === "number" ? state.duration : 0);
 			if (state.mode === "audio" || state.mode === "video") setMode(state.mode);
 		}, 1000);
 
@@ -424,16 +432,22 @@ function App() {
 	};
 
 	const previewFromResults = async (t: Track) => {
+		lastActionAtRef.current = Date.now();
 		setPreview(t);
 		setQueueIndex(-1);
 		setPaused(false);
+		setPosition(0);
+		setTrackDuration(0);
 		await queuePreview(t);
 	};
 
 	const jumpInQueue = async (i: number) => {
 		if (i < 0 || i >= queue.length) return;
+		lastActionAtRef.current = Date.now();
 		setQueueIndex(i);
 		setPaused(false);
+		setPosition(0);
+		setTrackDuration(0);
 		await queueJump(i);
 	};
 
@@ -608,6 +622,7 @@ function App() {
 			return;
 		}
 		if (key.name === "/") {
+			setFocus("results");
 			setShowSearchModal(true);
 			return;
 		}
@@ -872,14 +887,14 @@ function App() {
 	const durW = 7;
 	const viewsW = 7;
 	const uploaderW = Math.max(12, Math.min(28, Math.floor(panelInner * 0.2)));
-	const titleW = Math.max(10, panelInner - durW - viewsW - uploaderW - 8);
+	const titleW = Math.max(10, panelInner - durW - viewsW - uploaderW - 4);
 
 	const plDurW = 6;
-	const plTitleW = Math.max(10, termWidth - plDurW - 8);
+	const plTitleW = Math.max(10, termWidth - plDurW - 9);
 
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
-	const plPrefix = `${playlistUnsaved ? "* " : ""}Playlist`;
+	const plPrefix = `${playlistUnsaved ? "* " : ""}Local Playlist`;
 	const plCountSuffix = queue.length > 0 ? ` (${queue.length}) ` : "";
 	const plRightLabel = ` ${repeat ? "REPEAT • " : ""}${mode.toUpperCase()} • ? `;
 	const plTitleBarW = Math.max(0, termWidth - 6);
@@ -981,7 +996,16 @@ function App() {
 				border
 				borderColor={focus === "results" ? theme.borderFocus : theme.border}
 				backgroundColor={focus === "results" ? theme.bgFocus : undefined}
-				title={` YouTube Search Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} ── press / to search ──`}
+				title={(() => {
+					const rsLeftLabel = ` YouTube Search${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `;
+					const rsRightLabel = ` / `;
+					const rsTitleBarW = Math.max(0, termWidth - 6);
+					const rsGap = Math.max(
+						1,
+						rsTitleBarW - rsLeftLabel.length - rsRightLabel.length,
+					);
+					return `${rsLeftLabel}${"─".repeat(rsGap)}${rsRightLabel}`;
+				})()}
 				onMouseDown={() => setFocus("results")}
 			>
 				{results.length > 0 ? (
@@ -1050,63 +1074,76 @@ function App() {
 				)}
 			</box>
 
-			{showSearchModal ? (
-				<box
-					position="absolute"
-					top={4}
-					left={6}
-					right={6}
-					border
-					backgroundColor={theme.bg}
-					title=" Search "
-					padding={1}
-					flexDirection="column"
-				>
-					<box
-						flexDirection="row"
-						border
-						borderColor={theme.borderFocus}
-						backgroundColor={theme.bgFocus}
-						paddingLeft={1}
-						paddingRight={1}
-						alignItems="center"
-					>
-						<input
-							ref={inputRef}
-							value={query}
-							onInput={setQuery}
-							onSubmit={(value) => {
-								const v = typeof value === "string" ? value : query;
-								setQuery(v);
-								const q = v.trim();
-								if (!q) return;
-								setShowSearchModal(false);
-								setFocus("results");
-								if (q === lastQueryRef.current) {
-									loadMore();
-								} else {
-									doSearch(v);
-								}
-							}}
-							placeholder="artist, song, album..."
-							placeholderColor={theme.textMuted}
-							flexGrow={1}
-						/>
-					</box>
-					<text> </text>
-					<box flexDirection="row">
-						<text>
-							<span fg={theme.keyHint}>{fitCol("Enter", 8)}</span>
-							<span fg={theme.textMuted}>search</span>
-						</text>
-						<text>{"  "}</text>
-						<text>
-							<span fg={theme.keyHint}>{fitCol("Esc", 8)}</span>
-							<span fg={theme.textMuted}>close</span>
-						</text>
-					</box>
-				</box>
-			) : null}
+			{showSearchModal
+				? ((() => {
+						const MODAL_H = 9;
+						const innerH = Math.max(0, termHeight - 2);
+						const plH = Math.floor(innerH / 3);
+						const rsTop = 1 + plH;
+						const rsH = innerH - plH;
+						const top =
+							rsH >= MODAL_H
+								? rsTop + Math.floor((rsH - MODAL_H) / 2)
+								: Math.max(0, Math.floor((termHeight - MODAL_H) / 2));
+						return (
+							<box
+								position="absolute"
+								top={top}
+								left={6}
+								right={6}
+								border
+								backgroundColor={theme.bg}
+								title=" Search "
+								padding={1}
+								flexDirection="column"
+							>
+								<box
+									flexDirection="row"
+									border
+									borderColor={theme.borderFocus}
+									backgroundColor={theme.bgFocus}
+									paddingLeft={1}
+									paddingRight={1}
+									alignItems="center"
+								>
+									<input
+										ref={inputRef}
+										value={query}
+										onInput={setQuery}
+										onSubmit={(value) => {
+											const v = typeof value === "string" ? value : query;
+											setQuery(v);
+											const q = v.trim();
+											if (!q) return;
+											setShowSearchModal(false);
+											setFocus("results");
+											if (q === lastQueryRef.current) {
+												loadMore();
+											} else {
+												doSearch(v);
+											}
+										}}
+										placeholder="artist, song, album..."
+										placeholderColor={theme.textMuted}
+										flexGrow={1}
+									/>
+								</box>
+								<text> </text>
+								<box flexDirection="row">
+									<text>
+										<span fg={theme.keyHint}>{fitCol("Enter", 8)}</span>
+										<span fg={theme.textMuted}>search</span>
+									</text>
+									<text>{"  "}</text>
+									<text>
+										<span fg={theme.keyHint}>{fitCol("Esc", 8)}</span>
+										<span fg={theme.textMuted}>close</span>
+									</text>
+								</box>
+							</box>
+						);
+					})() as React.ReactNode)
+				: null}
 
 			{showPlaylists ? (
 				<box
@@ -1226,7 +1263,14 @@ function App() {
 			{showHelp ? (
 				<box
 					position="absolute"
-					top={6}
+					top={Math.max(
+						0,
+						Math.floor(
+							(termHeight -
+								(6 + Math.max(HELP_LEFT.length, HELP_RIGHT.length))) /
+								2,
+						),
+					)}
 					left={4}
 					right={4}
 					border
