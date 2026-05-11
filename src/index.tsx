@@ -868,9 +868,8 @@ function App() {
 							viewportOptions={{ backgroundColor: "transparent" }}
 							contentOptions={{ backgroundColor: "transparent" }}
 						>
-							{queue.flatMap((t, i) => {
-								const isCurrent = i === queueIndex;
-								const isPlaying = isCurrent && playing;
+							{queue.map((t, i) => {
+								const isPlaying = i === queueIndex && playing;
 								const isCursor = i === playlistSelected && focus === "playlist";
 								const title = fitCol(t.title.normalize("NFKC"), plTitleW);
 								const duration = fmtDur(t.duration).padStart(plDurW, " ");
@@ -881,7 +880,7 @@ function App() {
 									: isCursor
 										? "▶ "
 										: "  ";
-								const nodes = [
+								return (
 									<text
 										key={t.id}
 										id={`playlist-row-${t.id}`}
@@ -903,36 +902,34 @@ function App() {
 										}}
 									>
 										{`${marker}${title} ${duration}`}
-									</text>,
-								];
-								if (isCurrent) {
-									nodes.push(
-										<box key={`${t.id}-progress`} flexDirection="row">
-											<text
-												fg={theme.textMuted}
-											>{` ${fmtDur(position)} `}</text>
-											<text
-												fg={theme.accent}
-												onMouseDown={(e) => {
-													if (totalSec <= 0 || progressW <= 0) return;
-													const target = e.target;
-													if (!target) return;
-													const rel = e.x - target.screenX;
-													const r = Math.max(0, Math.min(1, rel / progressW));
-													const newPos = r * totalSec;
-													seekAbsolute(newPos);
-													setPosition(newPos);
-												}}
-											>
-												{progressBar}
-											</text>
-											<text fg={theme.textMuted}>{` ${fmtDur(totalSec)}`}</text>
-										</box>,
-									);
-								}
-								return nodes;
+									</text>
+								);
 							})}
 						</scrollbox>
+						{queueIndex >= 0 ? (
+							<>
+								<text> </text>
+								<box flexDirection="row" flexShrink={0}>
+									<text fg={theme.textMuted}>{` ${fmtDur(position)} `}</text>
+									<text
+										fg={theme.accent}
+										onMouseDown={(e) => {
+											if (totalSec <= 0 || progressW <= 0) return;
+											const target = e.target;
+											if (!target) return;
+											const rel = e.x - target.screenX;
+											const r = Math.max(0, Math.min(1, rel / progressW));
+											const newPos = r * totalSec;
+											seekAbsolute(newPos);
+											setPosition(newPos);
+										}}
+									>
+										{progressBar}
+									</text>
+									<text fg={theme.textMuted}>{` ${fmtDur(totalSec)} `}</text>
+								</box>
+							</>
+						) : null}
 					</>
 				) : (
 					<box padding={1}>
