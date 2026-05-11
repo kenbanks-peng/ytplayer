@@ -120,7 +120,7 @@ async function searchYouTube(
 	return tracks;
 }
 
-type Focus = "search" | "results" | "playlist";
+type Focus = "results" | "playlist";
 
 function scrollCursorIntoView(
 	sb: ScrollBoxRenderable | null,
@@ -139,6 +139,7 @@ function scrollCursorIntoView(
 }
 
 const HELP_LEFT: [string, string][] = [
+	["/", "open search"],
 	["Tab", "toggle focus"],
 	["Enter", "add to playlist"],
 	["i", "instant play"],
@@ -170,7 +171,8 @@ function App() {
 	const [results, setResults] = useState<Track[]>([]);
 	const [searching, setSearching] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [focus, setFocus] = useState<Focus>("search");
+	const [focus, setFocus] = useState<Focus>("results");
+	const [showSearchModal, setShowSearchModal] = useState(false);
 	const [queue, setQueue] = useState<Track[]>([]);
 	const [queueIndex, setQueueIndex] = useState(-1);
 	const [preview, setPreview] = useState<Track | null>(null);
@@ -215,9 +217,9 @@ function App() {
 	pageSizeRef.current = pageSize;
 
 	useEffect(() => {
-		if (focus === "search") inputRef.current?.focus();
+		if (showSearchModal) inputRef.current?.focus();
 		else inputRef.current?.blur();
-	}, [focus]);
+	}, [showSearchModal]);
 
 	useEffect(() => {
 		if (showPlaylists && plModalFocus === "input") {
@@ -521,6 +523,13 @@ function App() {
 	};
 
 	useKeyboard((key) => {
+		if (showSearchModal) {
+			if (key.name === "escape") {
+				setShowSearchModal(false);
+				return;
+			}
+			return;
+		}
 		if (showPlaylists) {
 			if (key.name === "escape") {
 				closePlaylistModal();
@@ -554,10 +563,7 @@ function App() {
 			}
 			return;
 		}
-		if (
-			(key.name === "?" || (key.shift && key.name === "/")) &&
-			focus !== "search"
-		) {
+		if (key.name === "?" || (key.shift && key.name === "/")) {
 			setShowHelp((s) => !s);
 			return;
 		}
@@ -565,17 +571,15 @@ function App() {
 			setShowHelp(false);
 			return;
 		}
-		if (key.shift && key.name === "p" && focus !== "search") {
+		if (key.name === "/") {
+			setShowSearchModal(true);
+			return;
+		}
+		if (key.shift && key.name === "p") {
 			openPlaylistModal();
 			return;
 		}
-		if (key.name === "tab") {
-			setFocus((f) =>
-				f === "search" ? "results" : f === "results" ? "playlist" : "search",
-			);
-			return;
-		}
-		if ((key.name === "h" || key.name === "l") && focus !== "search") {
+		if (key.name === "tab" || key.name === "h" || key.name === "l") {
 			setFocus((f) => (f === "results" ? "playlist" : "results"));
 			return;
 		}
@@ -610,31 +614,32 @@ function App() {
 		}
 		if (
 			(key.ctrl && key.name === "c") ||
-			((key.name === "q" || key.name === "escape") && focus !== "search")
+			key.name === "q" ||
+			key.name === "escape"
 		) {
 			process.nextTick(() => shutdown(0));
 			return;
 		}
-		if (key.name === "space" && focus !== "search") {
+		if (key.name === "space") {
 			(async () => {
 				const resp = await togglePause();
 				if (resp) setPaused(resp.paused);
 			})();
 			return;
 		}
-		if (key.name === "m" && focus !== "search") {
+		if (key.name === "m") {
 			const next: PlayMode = mode === "audio" ? "video" : "audio";
 			setMode(next);
 			setModeOnServer(next);
 			return;
 		}
-		if (key.name === "r" && focus !== "search") {
+		if (key.name === "r") {
 			const next = !repeat;
 			setRepeatState(next);
 			setRepeat(next);
 			return;
 		}
-		if (key.name === "s" && focus !== "search") {
+		if (key.name === "s") {
 			stopPlayback();
 			setQueueIndex(-1);
 			setPreview(null);
@@ -642,7 +647,7 @@ function App() {
 			setPaused(false);
 			return;
 		}
-		if (key.name === "f" && focus !== "search") {
+		if (key.name === "f") {
 			const q = query.trim();
 			if (q && q !== lastQueryRef.current) {
 				doSearch(q);
@@ -651,21 +656,21 @@ function App() {
 			}
 			return;
 		}
-		if (key.name === "n" && focus !== "search") {
+		if (key.name === "n") {
 			nextTrack();
 			return;
 		}
-		if (key.name === "right" && focus !== "search") {
+		if (key.name === "right") {
 			seekRelative(10);
 			setPosition((p) => Math.min(trackDuration || p + 10, p + 10));
 			return;
 		}
-		if (key.name === "left" && focus !== "search") {
+		if (key.name === "left") {
 			seekRelative(-10);
 			setPosition((p) => Math.max(0, p - 10));
 			return;
 		}
-		if (key.name === "p" && focus !== "search") {
+		if (key.name === "p") {
 			prevTrack();
 			return;
 		}
@@ -679,17 +684,13 @@ function App() {
 			if (t && queue.some((q) => q.id === t.id)) removeFromQueue(t.id);
 			return;
 		}
-		if (key.name === "x" && focus !== "search") {
+		if (key.name === "x") {
 			queueShuffle();
 			return;
 		}
-		if (key.name === "y" && focus !== "search") {
+		if (key.name === "y") {
 			const t =
-				focus === "results"
-					? results[selectedIndex]
-					: focus === "playlist"
-						? queue[playlistSelected]
-						: now;
+				focus === "results" ? results[selectedIndex] : queue[playlistSelected];
 			if (t) spawn(["open", t.url], { stdout: "ignore", stderr: "ignore" });
 			return;
 		}
@@ -698,7 +699,7 @@ function App() {
 			if (t) previewFromResults(t);
 			return;
 		}
-		if (key.name === "g" && focus !== "search" && queue.length > 0) {
+		if (key.name === "g" && queue.length > 0) {
 			const i = focus === "playlist" ? playlistSelected : 0;
 			jumpInQueue(i);
 			return;
@@ -769,7 +770,6 @@ function App() {
 			setError(null);
 			lastQueryRef.current = "";
 			saveSearch(null);
-			setFocus("search");
 			return;
 		}
 	});
@@ -793,75 +793,50 @@ function App() {
 		);
 	}
 
-	// Layout: results pane gets ~60%, playlist pane ~40%.
-	const inner = Math.max(52, termWidth - 8);
-	const resultsW = Math.floor(inner * 0.6);
-	const playlistW = inner - resultsW;
+	// Layout: three stacked full-width panels — Player / Playlist / Results.
+	const inner = Math.max(60, termWidth - 8);
+	const panelInner = Math.max(0, inner - 4);
 
-	const modeLabel = ` ${repeat ? "REPEAT • " : ""}${mode.toUpperCase()} `;
-	const searchW = playlistW;
-	const topPanelInner = Math.max(0, termWidth - searchW - 6);
-	const leftLabel = " YouTube Player ";
-	const gap = Math.max(1, topPanelInner - leftLabel.length - modeLabel.length);
-	const topTitle = `${leftLabel}${"─".repeat(gap)}${modeLabel}`;
-
-	const searchLeftLabel = " Search ";
-	const searchRightLabel = " ? ";
-	const searchGap = Math.max(
-		1,
-		searchW - searchLeftLabel.length - searchRightLabel.length - 4,
-	);
-	const searchTitle = `${searchLeftLabel}${"─".repeat(searchGap)}${searchRightLabel}`;
-
-	const queueLabel = now ? ` [${queueIndex + 1}/${queue.length}]` : "";
-	const progressW = Math.max(10, topPanelInner - 14 - queueLabel.length);
+	const progressW = Math.max(10, termWidth - 16);
 	const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
 	const ratio =
 		totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
 	const filled = Math.round(progressW * ratio);
 	const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
 
-	const titleLineW = Math.max(10, topPanelInner - 3);
-	let nowTitleStr = "";
-	let nowUploaderStr = "";
-	if (now) {
-		const fullTitle = now.title.normalize("NFKC");
-		const fullUploader = now.uploader ? now.uploader.normalize("NFKC") : "";
-		if (fullUploader) {
-			const desiredUpW = Math.min(displayWidth(fullUploader), 24);
-			const titleBudget = titleLineW - 3 - desiredUpW;
-			if (titleBudget >= 10) {
-				nowTitleStr = clip(fullTitle, titleBudget);
-				nowUploaderStr = clip(fullUploader, desiredUpW);
-			} else {
-				nowTitleStr = clip(fullTitle, titleLineW);
-			}
-		} else {
-			nowTitleStr = clip(fullTitle, titleLineW);
-		}
-	}
-
 	const durW = 7;
 	const viewsW = 7;
-	const uploaderW = Math.max(8, Math.min(20, Math.floor(resultsW * 0.22)));
-	const titleW = Math.max(10, resultsW - durW - viewsW - uploaderW - 8);
+	const uploaderW = Math.max(12, Math.min(28, Math.floor(panelInner * 0.2)));
+	const titleW = Math.max(10, panelInner - durW - viewsW - uploaderW - 8);
 
 	const plDurW = 6;
-	const plTitleW = Math.max(10, playlistW - plDurW - 5);
+	const plTitleW = Math.max(10, termWidth - plDurW - 8);
 
 	const playlistUnsaved =
 		playlistDirty || (playlistName === null && queue.length > 0);
 	const plPrefix = `${playlistUnsaved ? "* " : ""}Playlist`;
-	const plCountSuffix = queue.length > 0 ? ` (${queue.length}) ` : " ";
+	const plCountSuffix = queue.length > 0 ? ` (${queue.length}) ` : "";
+	const plRightLabel = ` ${repeat ? "REPEAT • " : ""}${mode.toUpperCase()} • ? `;
+	const plTitleBarW = Math.max(0, termWidth - 6);
 	const plNameBudget = Math.max(
 		0,
-		playlistW - 4 - displayWidth(plPrefix) - 2 - displayWidth(plCountSuffix),
+		plTitleBarW -
+			displayWidth(plPrefix) -
+			2 -
+			displayWidth(plCountSuffix) -
+			plRightLabel.length -
+			4,
 	);
 	const plNamePart =
 		playlistName && plNameBudget >= 4
 			? `: ${clip(playlistName, plNameBudget)}`
 			: "";
-	const playlistTitle = ` ${plPrefix}${plNamePart}${plCountSuffix}`;
+	const plLeftLabel = ` ${plPrefix}${plNamePart}${plCountSuffix} `;
+	const plGap = Math.max(
+		1,
+		plTitleBarW - plLeftLabel.length - plRightLabel.length,
+	);
+	const playlistTitle = `${plLeftLabel}${"─".repeat(plGap)}${plRightLabel}`;
 
 	return (
 		<box
@@ -870,217 +845,224 @@ function App() {
 			padding={1}
 			backgroundColor={theme.bg}
 		>
-			<box flexDirection="row" minHeight={4} flexShrink={0}>
-				<box
-					flexGrow={1}
-					flexBasis={resultsW}
-					flexDirection="column"
-					border
-					borderColor={theme.border}
-					title={topTitle}
-					paddingLeft={1}
-				>
-					{now ? (
-						<>
-							<text>
-								<span fg={paused ? theme.paused : theme.playing}>
-									{paused ? "❚❚" : "▶ "}
-								</span>{" "}
-								{nowTitleStr}
-								{nowUploaderStr ? (
-									<span fg={theme.textMuted}> — {nowUploaderStr}</span>
-								) : null}
-							</text>
-							<box flexDirection="row">
-								<text fg={theme.textMuted}>{fmtDur(position)} </text>
-								<text
-									fg={theme.accent}
-									onMouseDown={(e) => {
-										if (totalSec <= 0 || progressW <= 0) return;
-										const target = e.target;
-										if (!target) return;
-										const rel = e.x - target.screenX;
-										const ratio = Math.max(0, Math.min(1, rel / progressW));
-										const newPos = ratio * totalSec;
-										seekAbsolute(newPos);
-										setPosition(newPos);
-									}}
-								>
-									{progressBar}
-								</text>
-								<text fg={theme.textMuted}>
-									{` ${fmtDur(totalSec)}${queueLabel}`}
-								</text>
-							</box>
-						</>
-					) : (
-						<text fg={theme.textMuted}>Nothing playing</text>
-					)}
-				</box>
-				<box
-					flexBasis={searchW}
-					flexDirection="row"
-					border
-					borderColor={focus === "search" ? theme.borderFocus : theme.border}
-					backgroundColor={focus === "search" ? theme.bgFocus : undefined}
-					title={searchTitle}
-					paddingLeft={1}
-					alignItems="center"
-					onMouseDown={() => setFocus("search")}
-				>
-					<input
-						ref={inputRef}
-						value={query}
-						onInput={setQuery}
-						onSubmit={(value) => {
-							const v = typeof value === "string" ? value : query;
-							setQuery(v);
-							const q = v.trim();
-							if (!q) return;
-							setFocus("results");
-							if (q === lastQueryRef.current) {
-								loadMore();
-							} else {
-								doSearch(v);
-							}
-						}}
-						placeholder="artist, song, album..."
-						placeholderColor={theme.textMuted}
-						flexGrow={1}
-					/>
-				</box>
-			</box>
-
-			<box flexDirection="row" flexGrow={1}>
-				<box
-					flexGrow={1}
-					flexBasis={resultsW}
-					flexDirection="column"
-					border
-					borderColor={focus === "results" ? theme.borderFocus : theme.border}
-					backgroundColor={focus === "results" ? theme.bgFocus : undefined}
-					title={` Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} `}
-					onMouseDown={() => setFocus("results")}
-				>
-					{results.length > 0 ? (
-						<>
-							<text fg={theme.textMuted} wrapMode="none">
-								{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
-							</text>
-							<scrollbox
-								ref={resultsScrollRef}
-								flexGrow={1}
-								rootOptions={{ backgroundColor: "transparent" }}
-								wrapperOptions={{ backgroundColor: "transparent" }}
-								viewportOptions={{ backgroundColor: "transparent" }}
-								contentOptions={{ backgroundColor: "transparent" }}
-							>
-								{results.map((t, i) => {
-									const isCursor = i === selectedIndex && focus === "results";
-									const marker = pageMarker(t.page);
-									const title = fitCol(t.title.normalize("NFKC"), titleW);
-									const uploader = fitCol(
-										(t.uploader ?? "").normalize("NFKC"),
-										uploaderW,
-									);
-									const views = fmtCount(t.views).padStart(viewsW, " ");
-									const duration = fmtDur(t.duration).padStart(durW, " ");
-									return (
-										<text
-											key={t.id}
-											id={`results-row-${t.id}`}
-											wrapMode="none"
-											bg={isCursor ? theme.bgRowSelected : undefined}
-											fg={isCursor ? theme.textRowSelected : undefined}
-											onMouseDown={() => {
-												setFocus("results");
-												setSelectedIndex(i);
-												previewFromResults(t);
-											}}
-										>
-											{`${isCursor ? "▶ " : "  "}${marker} ${title}  ${uploader}  ${views}  ${duration}`}
-										</text>
-									);
-								})}
-							</scrollbox>
-						</>
-					) : (
-						<box padding={1}>
-							<text fg={theme.textMuted}>
-								{error
-									? `Error: ${error}`
-									: searching
-										? "Searching..."
-										: "No results yet."}
-							</text>
-						</box>
-					)}
-				</box>
-
-				<box
-					flexBasis={playlistW}
-					flexDirection="column"
-					border
-					borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
-					backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
-					title={playlistTitle}
-					onMouseDown={() => setFocus("playlist")}
-				>
-					{queue.length > 0 ? (
-						<>
-							<text fg={theme.textMuted} wrapMode="none">
-								{`  ${fitCol("Title", plTitleW)} ${"Length".padStart(plDurW, " ")}`}
-							</text>
-							<scrollbox
-								ref={playlistScrollRef}
-								flexGrow={1}
-								rootOptions={{ backgroundColor: "transparent" }}
-								wrapperOptions={{ backgroundColor: "transparent" }}
-								viewportOptions={{ backgroundColor: "transparent" }}
-								contentOptions={{ backgroundColor: "transparent" }}
-							>
-								{queue.map((t, i) => {
-									const isPlaying = i === queueIndex && playing;
-									const isCursor =
-										i === playlistSelected && focus === "playlist";
-									const title = fitCol(t.title.normalize("NFKC"), plTitleW);
-									const duration = fmtDur(t.duration).padStart(plDurW, " ");
-									return (
-										<text
-											key={t.id}
-											id={`playlist-row-${t.id}`}
-											wrapMode="none"
-											bg={
-												isPlaying
-													? theme.bgPlaying
-													: isCursor
-														? theme.bgRowSelected
-														: undefined
-											}
-											fg={
-												isPlaying || isCursor
-													? theme.textRowSelected
+			<box
+				flexDirection="column"
+				flexBasis={1}
+				flexGrow={1}
+				border
+				borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
+				backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
+				title={playlistTitle}
+				onMouseDown={() => setFocus("playlist")}
+			>
+				{queue.length > 0 ? (
+					<>
+						<text fg={theme.textMuted} wrapMode="none">
+							{`  ${fitCol("Title", plTitleW)} ${"Length".padStart(plDurW, " ")}`}
+						</text>
+						<scrollbox
+							ref={playlistScrollRef}
+							flexGrow={1}
+							rootOptions={{ backgroundColor: "transparent" }}
+							wrapperOptions={{ backgroundColor: "transparent" }}
+							viewportOptions={{ backgroundColor: "transparent" }}
+							contentOptions={{ backgroundColor: "transparent" }}
+						>
+							{queue.flatMap((t, i) => {
+								const isCurrent = i === queueIndex;
+								const isPlaying = isCurrent && playing;
+								const isCursor = i === playlistSelected && focus === "playlist";
+								const title = fitCol(t.title.normalize("NFKC"), plTitleW);
+								const duration = fmtDur(t.duration).padStart(plDurW, " ");
+								const marker = isPlaying
+									? paused
+										? "❚❚"
+										: "▶ "
+									: isCursor
+										? "▶ "
+										: "  ";
+								const nodes = [
+									<text
+										key={t.id}
+										id={`playlist-row-${t.id}`}
+										wrapMode="none"
+										bg={
+											isPlaying
+												? theme.bgPlaying
+												: isCursor
+													? theme.bgRowSelected
 													: undefined
-											}
-											onMouseDown={() => {
-												setFocus("playlist");
-												setPlaylistSelected(i);
-												jumpInQueue(i);
-											}}
-										>
-											{`${isCursor ? "▶ " : "  "}${title} ${duration}`}
-										</text>
+										}
+										fg={
+											isPlaying || isCursor ? theme.textRowSelected : undefined
+										}
+										onMouseDown={() => {
+											setFocus("playlist");
+											setPlaylistSelected(i);
+											jumpInQueue(i);
+										}}
+									>
+										{`${marker}${title} ${duration}`}
+									</text>,
+								];
+								if (isCurrent) {
+									nodes.push(
+										<box key={`${t.id}-progress`} flexDirection="row">
+											<text
+												fg={theme.textMuted}
+											>{` ${fmtDur(position)} `}</text>
+											<text
+												fg={theme.accent}
+												onMouseDown={(e) => {
+													if (totalSec <= 0 || progressW <= 0) return;
+													const target = e.target;
+													if (!target) return;
+													const rel = e.x - target.screenX;
+													const r = Math.max(0, Math.min(1, rel / progressW));
+													const newPos = r * totalSec;
+													seekAbsolute(newPos);
+													setPosition(newPos);
+												}}
+											>
+												{progressBar}
+											</text>
+											<text fg={theme.textMuted}>{` ${fmtDur(totalSec)}`}</text>
+										</box>,
 									);
-								})}
-							</scrollbox>
-						</>
-					) : (
-						<box padding={1}>
-							<text fg={theme.textMuted}>Empty. Enter on a result to add.</text>
-						</box>
-					)}
-				</box>
+								}
+								return nodes;
+							})}
+						</scrollbox>
+					</>
+				) : (
+					<box padding={1}>
+						<text fg={theme.textMuted}>Empty. Enter on a result to add.</text>
+					</box>
+				)}
 			</box>
+
+			<box
+				flexDirection="column"
+				flexBasis={1}
+				flexGrow={2}
+				border
+				borderColor={focus === "results" ? theme.borderFocus : theme.border}
+				backgroundColor={focus === "results" ? theme.bgFocus : undefined}
+				title={` YouTube Search Results${results.length > 0 ? ` (${results.length})` : ""}${searching ? " (searching...)" : ""} ── press / to search ──`}
+				onMouseDown={() => setFocus("results")}
+			>
+				{results.length > 0 ? (
+					<>
+						<text fg={theme.textMuted} wrapMode="none">
+							{`    ${fitCol("Title", titleW)}  ${fitCol("Uploader", uploaderW)}  ${"Views".padStart(viewsW, " ")}  ${"Length".padStart(durW, " ")}`}
+						</text>
+						<scrollbox
+							ref={resultsScrollRef}
+							flexGrow={1}
+							rootOptions={{ backgroundColor: "transparent" }}
+							wrapperOptions={{ backgroundColor: "transparent" }}
+							viewportOptions={{ backgroundColor: "transparent" }}
+							contentOptions={{ backgroundColor: "transparent" }}
+						>
+							{results.map((t, i) => {
+								const isCursor = i === selectedIndex && focus === "results";
+								const marker = pageMarker(t.page);
+								const title = fitCol(t.title.normalize("NFKC"), titleW);
+								const uploader = fitCol(
+									(t.uploader ?? "").normalize("NFKC"),
+									uploaderW,
+								);
+								const views = fmtCount(t.views).padStart(viewsW, " ");
+								const duration = fmtDur(t.duration).padStart(durW, " ");
+								return (
+									<text
+										key={t.id}
+										id={`results-row-${t.id}`}
+										wrapMode="none"
+										bg={isCursor ? theme.bgRowSelected : undefined}
+										fg={isCursor ? theme.textRowSelected : undefined}
+										onMouseDown={() => {
+											setFocus("results");
+											setSelectedIndex(i);
+											previewFromResults(t);
+										}}
+									>
+										{`${isCursor ? "▶ " : "  "}${marker} ${title}  ${uploader}  ${views}  ${duration}`}
+									</text>
+								);
+							})}
+						</scrollbox>
+					</>
+				) : (
+					<box padding={1}>
+						<text fg={theme.textMuted}>
+							{error
+								? `Error: ${error}`
+								: searching
+									? "Searching..."
+									: "No results yet."}
+						</text>
+					</box>
+				)}
+			</box>
+
+			{showSearchModal ? (
+				<box
+					position="absolute"
+					top={4}
+					left={6}
+					right={6}
+					border
+					backgroundColor={theme.bg}
+					title=" Search "
+					padding={1}
+					flexDirection="column"
+				>
+					<box
+						flexDirection="row"
+						border
+						borderColor={theme.borderFocus}
+						backgroundColor={theme.bgFocus}
+						paddingLeft={1}
+						paddingRight={1}
+						alignItems="center"
+					>
+						<input
+							ref={inputRef}
+							value={query}
+							onInput={setQuery}
+							onSubmit={(value) => {
+								const v = typeof value === "string" ? value : query;
+								setQuery(v);
+								const q = v.trim();
+								if (!q) return;
+								setShowSearchModal(false);
+								setFocus("results");
+								if (q === lastQueryRef.current) {
+									loadMore();
+								} else {
+									doSearch(v);
+								}
+							}}
+							placeholder="artist, song, album..."
+							placeholderColor={theme.textMuted}
+							flexGrow={1}
+						/>
+					</box>
+					<text> </text>
+					<box flexDirection="row">
+						<text>
+							<span fg={theme.keyHint}>{fitCol("Enter", 8)}</span>
+							<span fg={theme.textMuted}>search</span>
+						</text>
+						<text>{"  "}</text>
+						<text>
+							<span fg={theme.keyHint}>{fitCol("Esc", 8)}</span>
+							<span fg={theme.textMuted}>close</span>
+						</text>
+					</box>
+				</box>
+			) : null}
 
 			{showPlaylists ? (
 				<box
