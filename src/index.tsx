@@ -122,19 +122,25 @@ async function searchYouTube(
 
 type Focus = "results" | "playlist";
 
-function scrollCursorIntoView(
+function scrollCursorIntoView<T extends { id: string }>(
 	sb: ScrollBoxRenderable | null,
+	rows: T[],
 	cursorIndex: number,
+	rowIdPrefix: string,
+	direction: number,
 	padding = 2,
 ) {
-	if (!sb || cursorIndex < 0) return;
-	const viewH = sb.viewport.height;
-	if (viewH <= 0) return;
-	const top = sb.scrollTop;
-	if (cursorIndex < top + padding) {
-		sb.scrollTop = Math.max(0, cursorIndex - padding);
-	} else if (cursorIndex > top + viewH - padding - 1) {
-		sb.scrollTop = cursorIndex - viewH + padding + 1;
+	if (!sb || cursorIndex < 0 || cursorIndex >= rows.length) return;
+	const cursorRow = rows[cursorIndex];
+	if (!cursorRow) return;
+	const padIndex =
+		direction >= 0
+			? Math.min(rows.length - 1, cursorIndex + padding)
+			: Math.max(0, cursorIndex - padding);
+	const padRow = rows[padIndex];
+	sb.scrollChildIntoView(`${rowIdPrefix}${cursorRow.id}`);
+	if (padRow && padIndex !== cursorIndex) {
+		sb.scrollChildIntoView(`${rowIdPrefix}${padRow.id}`);
 	}
 }
 
@@ -208,6 +214,8 @@ function App() {
 	const plInputRef = useRef<InputRenderable | null>(null);
 	const resultsScrollRef = useRef<ScrollBoxRenderable | null>(null);
 	const playlistScrollRef = useRef<ScrollBoxRenderable | null>(null);
+	const prevSelectedIndexRef = useRef(0);
+	const prevPlaylistSelectedRef = useRef(0);
 	const { width: termWidth, height: termHeight } = useTerminalDimensions();
 	const pageSize = Math.max(
 		MIN_PAGE_SIZE,
@@ -320,16 +328,40 @@ function App() {
 	}, [queue.length, playlistSelected]);
 
 	useEffect(() => {
-		scrollCursorIntoView(resultsScrollRef.current, selectedIndex);
-	}, [selectedIndex]);
+		const dir = Math.sign(selectedIndex - prevSelectedIndexRef.current) || 1;
+		prevSelectedIndexRef.current = selectedIndex;
+		scrollCursorIntoView(
+			resultsScrollRef.current,
+			results,
+			selectedIndex,
+			"results-row-",
+			dir,
+		);
+	}, [selectedIndex, results]);
 
 	useEffect(() => {
-		scrollCursorIntoView(playlistScrollRef.current, playlistSelected);
-	}, [playlistSelected]);
+		const dir =
+			Math.sign(playlistSelected - prevPlaylistSelectedRef.current) || 1;
+		prevPlaylistSelectedRef.current = playlistSelected;
+		scrollCursorIntoView(
+			playlistScrollRef.current,
+			queue,
+			playlistSelected,
+			"playlist-row-",
+			dir,
+		);
+	}, [playlistSelected, queue]);
 
 	useEffect(() => {
 		if (queueIndex >= 0) setPlaylistSelected(queueIndex);
 	}, [queueIndex]);
+
+	const nowId = now?.id;
+	useEffect(() => {
+		if (!nowId) return;
+		const idx = results.findIndex((t) => t.id === nowId);
+		if (idx >= 0) setSelectedIndex(idx);
+	}, [nowId, results]);
 
 	const doSearch = async (q: string = query) => {
 		if (!q.trim() || searching) return;
@@ -706,6 +738,7 @@ function App() {
 		if (key.name === "g" && queue.length > 0) {
 			const i = focus === "playlist" ? playlistSelected : 0;
 			jumpInQueue(i);
+			setFocus("playlist");
 			return;
 		}
 		if (key.name === "c" && focus === "playlist") {
@@ -810,6 +843,31 @@ function App() {
 		totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
 	const filled = Math.round(progressW * ratio);
 	const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
+	const previewing = queueIndex === -1 && !!preview;
+	const progressEl = (
+		<box flexDirection="row" flexShrink={0} marginTop={1}>
+			<text fg={paused ? theme.paused : theme.playing}>
+				{paused ? " ❚❚ " : " ▶  "}
+			</text>
+			<text fg={theme.textMuted}>{`${posStr} `}</text>
+			<text
+				fg={theme.accent}
+				onMouseDown={(e) => {
+					if (totalSec <= 0 || progressW <= 0) return;
+					const target = e.target;
+					if (!target) return;
+					const rel = e.x - target.screenX;
+					const r = Math.max(0, Math.min(1, rel / progressW));
+					const newPos = r * totalSec;
+					seekAbsolute(newPos);
+					setPosition(newPos);
+				}}
+			>
+				{progressBar}
+			</text>
+			<text fg={theme.textMuted}>{` ${totStr} `}</text>
+		</box>
+	);
 
 	const durW = 7;
 	const viewsW = 7;
@@ -907,30 +965,7 @@ function App() {
 								);
 							})}
 						</scrollbox>
-						{queueIndex >= 0 ? (
-							<box flexDirection="row" flexShrink={0} marginTop={1}>
-								<text fg={paused ? theme.paused : theme.playing}>
-									{paused ? " ❚❚ " : " ▶  "}
-								</text>
-								<text fg={theme.textMuted}>{`${posStr} `}</text>
-								<text
-									fg={theme.accent}
-									onMouseDown={(e) => {
-										if (totalSec <= 0 || progressW <= 0) return;
-										const target = e.target;
-										if (!target) return;
-										const rel = e.x - target.screenX;
-										const r = Math.max(0, Math.min(1, rel / progressW));
-										const newPos = r * totalSec;
-										seekAbsolute(newPos);
-										setPosition(newPos);
-									}}
-								>
-									{progressBar}
-								</text>
-								<text fg={theme.textMuted}>{` ${totStr} `}</text>
-							</box>
-						) : null}
+						{queueIndex >= 0 ? progressEl : null}
 					</>
 				) : (
 					<box padding={1}>
@@ -1000,6 +1035,7 @@ function App() {
 								);
 							})}
 						</scrollbox>
+						{previewing ? progressEl : null}
 					</>
 				) : (
 					<box padding={1}>
