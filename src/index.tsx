@@ -327,6 +327,10 @@ function App() {
 		scrollCursorIntoView(playlistScrollRef.current, playlistSelected);
 	}, [playlistSelected]);
 
+	useEffect(() => {
+		if (queueIndex >= 0) setPlaylistSelected(queueIndex);
+	}, [queueIndex]);
+
 	const doSearch = async (q: string = query) => {
 		if (!q.trim() || searching) return;
 		abortRef.current?.abort();
@@ -797,8 +801,11 @@ function App() {
 	const inner = Math.max(60, termWidth - 8);
 	const panelInner = Math.max(0, inner - 4);
 
-	const progressW = Math.max(10, termWidth - 16);
 	const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
+	const posStr = fmtDur(position);
+	const totStr = fmtDur(totalSec);
+	const progressSideW = posStr.length + totStr.length + 8;
+	const progressW = Math.max(10, termWidth - 3 - progressSideW);
 	const ratio =
 		totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
 	const filled = Math.round(progressW * ratio);
@@ -873,13 +880,7 @@ function App() {
 								const isCursor = i === playlistSelected && focus === "playlist";
 								const title = fitCol(t.title.normalize("NFKC"), plTitleW);
 								const duration = fmtDur(t.duration).padStart(plDurW, " ");
-								const marker = isPlaying
-									? paused
-										? "❚❚"
-										: "▶ "
-									: isCursor
-										? "▶ "
-										: "  ";
+								const marker = isCursor ? "▶ " : "  ";
 								return (
 									<text
 										key={t.id}
@@ -907,28 +908,28 @@ function App() {
 							})}
 						</scrollbox>
 						{queueIndex >= 0 ? (
-							<>
-								<text> </text>
-								<box flexDirection="row" flexShrink={0}>
-									<text fg={theme.textMuted}>{` ${fmtDur(position)} `}</text>
-									<text
-										fg={theme.accent}
-										onMouseDown={(e) => {
-											if (totalSec <= 0 || progressW <= 0) return;
-											const target = e.target;
-											if (!target) return;
-											const rel = e.x - target.screenX;
-											const r = Math.max(0, Math.min(1, rel / progressW));
-											const newPos = r * totalSec;
-											seekAbsolute(newPos);
-											setPosition(newPos);
-										}}
-									>
-										{progressBar}
-									</text>
-									<text fg={theme.textMuted}>{` ${fmtDur(totalSec)} `}</text>
-								</box>
-							</>
+							<box flexDirection="row" flexShrink={0} marginTop={1}>
+								<text fg={paused ? theme.paused : theme.playing}>
+									{paused ? " ❚❚ " : " ▶  "}
+								</text>
+								<text fg={theme.textMuted}>{`${posStr} `}</text>
+								<text
+									fg={theme.accent}
+									onMouseDown={(e) => {
+										if (totalSec <= 0 || progressW <= 0) return;
+										const target = e.target;
+										if (!target) return;
+										const rel = e.x - target.screenX;
+										const r = Math.max(0, Math.min(1, rel / progressW));
+										const newPos = r * totalSec;
+										seekAbsolute(newPos);
+										setPosition(newPos);
+									}}
+								>
+									{progressBar}
+								</text>
+								<text fg={theme.textMuted}>{` ${totStr} `}</text>
+							</box>
 						) : null}
 					</>
 				) : (
@@ -963,6 +964,8 @@ function App() {
 						>
 							{results.map((t, i) => {
 								const isCursor = i === selectedIndex && focus === "results";
+								const isPlaying =
+									queueIndex === -1 && playing && preview?.id === t.id;
 								const marker = pageMarker(t.page);
 								const title = fitCol(t.title.normalize("NFKC"), titleW);
 								const uploader = fitCol(
@@ -976,8 +979,16 @@ function App() {
 										key={t.id}
 										id={`results-row-${t.id}`}
 										wrapMode="none"
-										bg={isCursor ? theme.bgRowSelected : undefined}
-										fg={isCursor ? theme.textRowSelected : undefined}
+										bg={
+											isPlaying
+												? theme.bgPlaying
+												: isCursor
+													? theme.bgRowSelected
+													: undefined
+										}
+										fg={
+											isPlaying || isCursor ? theme.textRowSelected : undefined
+										}
 										onMouseDown={() => {
 											setFocus("results");
 											setSelectedIndex(i);
