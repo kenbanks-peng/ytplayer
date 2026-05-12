@@ -1332,13 +1332,26 @@ function App() {
 const renderer = await createCliRenderer();
 createRoot(renderer).render(<App />);
 
-const shutdown = (code = 0) => {
+// destroy() can defer the native cleanup (kitty keyboard pop, alt-screen exit,
+// mouse disable) to the render loop's finally block if called mid-render.
+// Wait for the 'destroy' event before exiting so those sequences actually fire.
+const shutdown = (code = 0, err?: unknown) => {
+	let exited = false;
+	const exit = () => {
+		if (exited) return;
+		exited = true;
+		if (err !== undefined) console.error(err);
+		process.exit(code);
+	};
 	try {
+		renderer.once("destroy", exit);
 		renderer.destroy();
 	} catch {}
-	process.exit(code);
+	setTimeout(exit, 250).unref();
 };
 
 process.on("SIGINT", () => shutdown(130));
 process.on("SIGTERM", () => shutdown(143));
 process.on("SIGHUP", () => shutdown(129));
+process.on("uncaughtException", (err) => shutdown(1, err));
+process.on("unhandledRejection", (err) => shutdown(1, err));
