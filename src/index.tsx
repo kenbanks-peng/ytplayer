@@ -708,7 +708,19 @@ function App() {
 			return;
 		}
 		if (key.name === "n") {
-			nextTrack();
+			if (focus === "results") {
+				if (results.length === 0) return;
+				const next = Math.min(results.length - 1, selectedIndex + 1);
+				if (next !== selectedIndex) {
+					const t = results[next];
+					if (t) {
+						setSelectedIndex(next);
+						previewFromResults(t);
+					}
+				}
+			} else {
+				nextTrack();
+			}
 			return;
 		}
 		if (key.name === "right") {
@@ -722,7 +734,19 @@ function App() {
 			return;
 		}
 		if (key.name === "p") {
-			prevTrack();
+			if (focus === "results") {
+				if (results.length === 0) return;
+				const prev = Math.max(0, selectedIndex - 1);
+				if (prev !== selectedIndex) {
+					const t = results[prev];
+					if (t) {
+						setSelectedIndex(prev);
+						previewFromResults(t);
+					}
+				}
+			} else {
+				prevTrack();
+			}
 			return;
 		}
 		if (key.name === "d" && focus === "playlist") {
