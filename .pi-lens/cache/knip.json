@@ -1,0 +1,71 @@
+{
+  "success": true,
+  "issues": [
+    {
+      "type": "export",
+      "name": "queuePlay",
+      "file": "src/client.ts",
+      "line": 60
+    },
+    {
+      "type": "export",
+      "name": "PROTOCOL_VERSION",
+      "file": "src/protocol.ts",
+      "line": 29
+    },
+    {
+      "type": "export",
+      "name": "charWidth",
+      "file": "src/text.ts",
+      "line": 36
+    },
+    {
+      "type": "export",
+      "name": "fit",
+      "file": "src/text.ts",
+      "line": 52
+    },
+    {
+      "type": "export",
+      "name": "Theme",
+      "file": "src/theme.ts",
+      "line": 59
+    }
+  ],
+  "unusedExports": [
+    {
+      "type": "export",
+      "name": "queuePlay",
+      "file": "src/client.ts",
+      "line": 60
+    },
+    {
+      "type": "export",
+      "name": "PROTOCOL_VERSION",
+      "file": "src/protocol.ts",
+      "line": 29
+    },
+    {
+      "type": "export",
+      "name": "charWidth",
+      "file": "src/text.ts",
+      "line": 36
+    },
+    {
+      "type": "export",
+      "name": "fit",
+      "file": "src/text.ts",
+      "line": 52
+    },
+    {
+      "type": "export",
+      "name": "Theme",
+      "file": "src/theme.ts",
+      "line": 59
+    }
+  ],
+  "unusedFiles": [],
+  "unusedDeps": [],
+  "unlistedDeps": [],
+  "summary": "Found 5 issues"
+}
