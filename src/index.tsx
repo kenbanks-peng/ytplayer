@@ -894,9 +894,10 @@ function App() {
   const inner = Math.max(60, termWidth - 8);
   const panelInner = Math.max(0, inner - 4);
 
-  const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
+  const progressTotalSec = trackDuration > 0 ? trackDuration : 0;
+  const displayTotalSec = now?.duration ?? progressTotalSec;
   const posStr = fmtDur(position);
-  const totStr = fmtDur(totalSec);
+  const totStr = fmtDur(displayTotalSec);
   const stopLabel = "◾ ";
   const pauseLabel = "⏸ ";
   const playLabel = "▶";
@@ -909,7 +910,9 @@ function App() {
     3;
   const progressW = Math.max(10, termWidth - 7 - progressSideW);
   const ratio =
-    totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
+    progressTotalSec > 0
+      ? Math.min(1, Math.max(0, position / progressTotalSec))
+      : 0;
   const filled = Math.round(progressW * ratio);
   const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
   const progressEl = (
@@ -942,12 +945,12 @@ function App() {
       <text
         fg={theme.accent}
         onMouseDown={(e) => {
-          if (totalSec <= 0 || progressW <= 0) return;
+          if (progressTotalSec <= 0 || progressW <= 0) return;
           const target = e.target;
           if (!target) return;
           const rel = e.x - target.screenX;
           const r = Math.max(0, Math.min(1, rel / progressW));
-          const newPos = r * totalSec;
+          const newPos = r * progressTotalSec;
           seekAbsolute(newPos);
           setPosition(newPos);
         }}
