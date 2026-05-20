@@ -897,8 +897,8 @@ function App() {
   const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
   const posStr = fmtDur(position);
   const totStr = fmtDur(totalSec);
-  const stopLabel = "■";
-  const pauseLabel = "  ⏸ ";
+  const stopLabel = "◾ ";
+  const pauseLabel = "⏸ ";
   const playLabel = "▶";
   const progressSideW =
     displayWidth(stopLabel) +
@@ -907,7 +907,7 @@ function App() {
     posStr.length +
     totStr.length +
     3;
-  const progressW = Math.max(10, termWidth - 3 - progressSideW);
+  const progressW = Math.max(10, termWidth - 7 - progressSideW);
   const ratio =
     totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
   const filled = Math.round(progressW * ratio);

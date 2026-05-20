@@ -3,8 +3,8 @@
   "files": {
     "src/index.tsx": {
       "latest": {
-        "commit": "cdfb39f",
-        "timestamp": "2026-05-20T16:49:36.785Z",
+        "commit": "64164ad",
+        "timestamp": "2026-05-20T17:10:35.160Z",
         "mi": 0,
         "cognitive": 803,
         "nesting": 8,
@@ -46,6 +46,16 @@
         {
           "commit": "cdfb39f",
           "timestamp": "2026-05-20T16:49:36.785Z",
+          "mi": 0,
+          "cognitive": 803,
+          "nesting": 8,
+          "lines": 1375,
+          "maxCyclomatic": 615,
+          "entropy": 7.07
+        },
+        {
+          "commit": "64164ad",
+          "timestamp": "2026-05-20T17:10:35.160Z",
           "mi": 0,
           "cognitive": 803,
           "nesting": 8,
@@ -157,5 +167,5 @@
       "trend": "stable"
     }
   },
-  "capturedAt": "2026-05-20T16:49:50.251Z"
+  "capturedAt": "2026-05-20T17:10:40.160Z"
 }
