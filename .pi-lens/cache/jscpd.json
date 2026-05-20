@@ -1,7 +1,24 @@
 {
   "success": true,
-  "clones": [],
-  "duplicatedLines": 0,
-  "totalLines": 1314,
-  "percentage": 0
+  "clones": [
+    {
+      "fileA": "src/tui/components/PlaylistPanel.tsx",
+      "startA": 42,
+      "fileB": "src/tui/components/ResultsPanel.tsx",
+      "startB": 64,
+      "lines": 22,
+      "tokens": 0
+    },
+    {
+      "fileA": "src/tui/App.tsx",
+      "startA": 301,
+      "fileB": "src/tui/App.tsx",
+      "startB": 271,
+      "lines": 10,
+      "tokens": 0
+    }
+  ],
+  "duplicatedLines": 30,
+  "totalLines": 3420,
+  "percentage": 0.88
 }

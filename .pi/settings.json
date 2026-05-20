@@ -1,0 +1,10 @@
+{
+  "flowSettings": {
+    "animation": {
+      "glitch": false
+    },
+    "askUser": {
+      "enabled": true
+    }
+  }
+}
