@@ -897,9 +897,9 @@ function App() {
   const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
   const posStr = fmtDur(position);
   const totStr = fmtDur(totalSec);
-  const stopLabel = " ■ ";
-  const pauseLabel = " ❚❚ ";
-  const playLabel = " ▶ ";
+  const stopLabel = "■";
+  const pauseLabel = "  ⏸ ";
+  const playLabel = "▶";
   const progressSideW =
     displayWidth(stopLabel) +
     displayWidth(pauseLabel) +
@@ -938,7 +938,7 @@ function App() {
       >
         {playLabel}
       </text>
-      <text fg={theme.textMuted}>{`${posStr} `}</text>
+      <text fg={theme.textMuted}>{` ${posStr} `}</text>
       <text
         fg={theme.accent}
         onMouseDown={(e) => {
