@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "synced_at": "2026-05-20T23:34:13.633Z",
+  "packages": {
+    "pi-subagents": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.633Z"
+    },
+    "pi-mcp-adapter": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "rpiv-ask-user-question": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-lens": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "rpiv-todo": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-simplify": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-markdown-preview": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "rpiv-btw": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "whatsapp-pi": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "context-mode": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-keychain-provider.ts": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "index.ts": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-bar": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    },
+    "pi-codex-conversion": {
+      "type": "pi-native",
+      "installed": true,
+      "verified": true,
+      "installed_at": "2026-05-20T23:34:13.634Z"
+    }
+  },
+  "mcp_servers": {}
+}
