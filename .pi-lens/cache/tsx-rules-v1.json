@@ -1,7 +1,7 @@
 {
   "version": "v1",
-  "timestamp": 1779242402146,
-  "ruleHash": "7e0313fd6293765e",
+  "timestamp": 1779286438277,
+  "ruleHash": "33a6d8e82f749d9c",
   "queries": [
     {
       "id": "dangerously-set-inner-html",

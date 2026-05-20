@@ -60,10 +60,11 @@ const pageMarker = (page: number): string =>
 function sortByViewsDesc(tracks: Track[]): Track[] {
   return [...tracks].sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
 }
-const MIN_PAGE_SIZE = 20;
-// Vertical chrome above the results scrollbox: outer padding(2) + top row(4)
-// + results border(2) + header(1) + bottom border guard(1) ≈ 10 rows.
-const RESULTS_VERTICAL_CHROME = 10;
+// Rows inside the results panel that are not available for result items:
+// border(2) + header(1).
+const RESULTS_PANEL_CHROME = 3;
+// The progress row has marginTop={1} and one text row.
+const PROGRESS_EL_HEIGHT = 2;
 
 async function searchYouTube(
   query: string,
@@ -220,9 +221,15 @@ function App() {
   const prevSelectedIndexRef = useRef(0);
   const prevPlaylistSelectedRef = useRef(0);
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
+  const innerHeight = Math.max(0, termHeight - 2);
+  const playlistPanelHeight = Math.floor(innerHeight / 3);
+  const resultsPanelHeight = innerHeight - playlistPanelHeight;
+  const previewing = queueIndex === -1 && !!preview;
   const pageSize = Math.max(
-    MIN_PAGE_SIZE,
-    termHeight - RESULTS_VERTICAL_CHROME,
+    1,
+    resultsPanelHeight -
+      RESULTS_PANEL_CHROME -
+      (previewing ? PROGRESS_EL_HEIGHT : 0),
   );
   const pageSizeRef = useRef(pageSize);
   pageSizeRef.current = pageSize;
@@ -884,7 +891,6 @@ function App() {
     totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
   const filled = Math.round(progressW * ratio);
   const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
-  const previewing = queueIndex === -1 && !!preview;
   const progressEl = (
     <box flexDirection="row" flexShrink={0} marginTop={1}>
       <text fg={paused ? theme.paused : theme.playing}>
@@ -953,8 +959,7 @@ function App() {
     >
       <box
         flexDirection="column"
-        flexBasis={1}
-        flexGrow={1}
+        height={playlistPanelHeight}
         border
         borderColor={focus === "playlist" ? theme.borderFocus : theme.border}
         backgroundColor={focus === "playlist" ? theme.bgFocus : undefined}
@@ -1017,8 +1022,7 @@ function App() {
 
       <box
         flexDirection="column"
-        flexBasis={1}
-        flexGrow={2}
+        height={resultsPanelHeight}
         border
         borderColor={focus === "results" ? theme.borderFocus : theme.border}
         backgroundColor={focus === "results" ? theme.bgFocus : undefined}
@@ -1043,9 +1047,9 @@ function App() {
               ref={resultsScrollRef}
               flexGrow={1}
               flexShrink={1}
-              marginBottom={1}
               rootOptions={{ backgroundColor: "transparent" }}
               wrapperOptions={{ backgroundColor: "transparent" }}
+              horizontalScrollbarOptions={{ height: 0, visible: false }}
               viewportOptions={{ backgroundColor: "transparent" }}
               contentOptions={{ backgroundColor: "transparent" }}
             >

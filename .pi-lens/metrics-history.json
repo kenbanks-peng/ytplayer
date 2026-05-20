@@ -3,14 +3,14 @@
   "files": {
     "src/index.tsx": {
       "latest": {
-        "commit": "4fea6d0",
-        "timestamp": "2026-05-20T01:58:31.651Z",
+        "commit": "193bada",
+        "timestamp": "2026-05-20T14:09:55.094Z",
         "mi": 0,
-        "cognitive": 794,
+        "cognitive": 804,
         "nesting": 8,
-        "lines": 1309,
+        "lines": 1333,
         "maxCyclomatic": 608,
-        "entropy": 7.01
+        "entropy": 7.07
       },
       "history": [
         {
@@ -22,10 +22,20 @@
           "lines": 1309,
           "maxCyclomatic": 608,
           "entropy": 7.01
+        },
+        {
+          "commit": "193bada",
+          "timestamp": "2026-05-20T14:09:55.094Z",
+          "mi": 0,
+          "cognitive": 804,
+          "nesting": 8,
+          "lines": 1333,
+          "maxCyclomatic": 608,
+          "entropy": 7.07
         }
       ],
       "trend": "stable"
     }
   },
-  "capturedAt": "2026-05-20T01:58:36.652Z"
+  "capturedAt": "2026-05-20T14:10:00.095Z"
 }
