@@ -898,7 +898,7 @@ function App() {
   const displayTotalSec = now?.duration ?? progressTotalSec;
   const posStr = fmtDur(position);
   const totStr = fmtDur(displayTotalSec);
-  const stopLabel = "◾ ";
+  const stopLabel = " ◾";
   const pauseLabel = "⏸ ";
   const playLabel = "▶";
   const progressSideW =
