@@ -30,7 +30,8 @@ import {
   setMode as setModeOnServer,
   setRepeat,
   stopPlayback,
-  togglePause,
+  pausePlayback,
+  playPlayback,
 } from "./client";
 import {
   deletePlaylist,
@@ -161,7 +162,7 @@ const HELP_LEFT: [string, string][] = [
   ["P", "playlists: save / load / delete"],
 ];
 const HELP_RIGHT: [string, string][] = [
-  ["Space", "pause / resume"],
+  ["Space", "pause"],
   ["p / n", "prev / next track"],
   ["← / →", "seek -10s / +10s"],
   ["s", "stop"],
@@ -185,7 +186,7 @@ function App() {
   const [queue, setQueue] = useState<Track[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [preview, setPreview] = useState<Track | null>(null);
-  const [paused, setPaused] = useState(false);
+  const [_paused, setPaused] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [repeat, setRepeatState] = useState(false);
   const [mode, setMode] = useState<PlayMode>("audio");
@@ -581,6 +582,24 @@ function App() {
     });
   };
 
+  const pauseCurrentPlayback = async () => {
+    const resp = await pausePlayback();
+    if (resp) setPaused(resp.paused);
+  };
+
+  const playCurrentPlayback = async () => {
+    const resp = await playPlayback();
+    if (resp) setPaused(resp.paused);
+  };
+
+  const stopCurrentPlayback = () => {
+    stopPlayback();
+    setQueueIndex(-1);
+    setPreview(null);
+    setPlaying(false);
+    setPaused(false);
+  };
+
   useKeyboard((key) => {
     if (showSearchModal) {
       if (key.name === "escape") {
@@ -681,10 +700,7 @@ function App() {
       return;
     }
     if (key.name === "space") {
-      (async () => {
-        const resp = await togglePause();
-        if (resp) setPaused(resp.paused);
-      })();
+      pauseCurrentPlayback();
       return;
     }
     if (key.name === "m") {
@@ -700,11 +716,7 @@ function App() {
       return;
     }
     if (key.name === "s") {
-      stopPlayback();
-      setQueueIndex(-1);
-      setPreview(null);
-      setPlaying(false);
-      setPaused(false);
+      stopCurrentPlayback();
       return;
     }
     if (key.name === "f") {
@@ -885,7 +897,16 @@ function App() {
   const totalSec = trackDuration > 0 ? trackDuration : (now?.duration ?? 0);
   const posStr = fmtDur(position);
   const totStr = fmtDur(totalSec);
-  const progressSideW = posStr.length + totStr.length + 8;
+  const stopLabel = " ■ ";
+  const pauseLabel = " ❚❚ ";
+  const playLabel = " ▶ ";
+  const progressSideW =
+    displayWidth(stopLabel) +
+    displayWidth(pauseLabel) +
+    displayWidth(playLabel) +
+    posStr.length +
+    totStr.length +
+    3;
   const progressW = Math.max(10, termWidth - 3 - progressSideW);
   const ratio =
     totalSec > 0 ? Math.min(1, Math.max(0, position / totalSec)) : 0;
@@ -893,8 +914,29 @@ function App() {
   const progressBar = `${"█".repeat(filled)}${"░".repeat(progressW - filled)}`;
   const progressEl = (
     <box flexDirection="row" flexShrink={0} marginTop={1}>
-      <text fg={paused ? theme.paused : theme.playing}>
-        {paused ? " ❚❚ " : " ▶  "}
+      <text
+        fg={theme.paused}
+        onMouseDown={() => {
+          stopCurrentPlayback();
+        }}
+      >
+        {stopLabel}
+      </text>
+      <text
+        fg={theme.paused}
+        onMouseDown={() => {
+          pauseCurrentPlayback();
+        }}
+      >
+        {pauseLabel}
+      </text>
+      <text
+        fg={theme.playing}
+        onMouseDown={() => {
+          playCurrentPlayback();
+        }}
+      >
+        {playLabel}
       </text>
       <text fg={theme.textMuted}>{`${posStr} `}</text>
       <text
