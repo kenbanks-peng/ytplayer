@@ -29,7 +29,7 @@
       "type": "export",
       "name": "Theme",
       "file": "src/theme.ts",
-      "line": 59
+      "line": 60
     }
   ],
   "unusedExports": [
@@ -61,7 +61,7 @@
       "type": "export",
       "name": "Theme",
       "file": "src/theme.ts",
-      "line": 59
+      "line": 60
     }
   ],
   "unusedFiles": [],

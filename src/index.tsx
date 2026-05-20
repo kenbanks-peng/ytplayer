@@ -186,7 +186,7 @@ function App() {
   const [queue, setQueue] = useState<Track[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [preview, setPreview] = useState<Track | null>(null);
-  const [_paused, setPaused] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [repeat, setRepeatState] = useState(false);
   const [mode, setMode] = useState<PlayMode>("audio");
@@ -943,7 +943,7 @@ function App() {
       </text>
       <text fg={theme.textMuted}>{` ${posStr} `}</text>
       <text
-        fg={theme.accent}
+        fg={paused ? theme.paused : theme.accent}
         onMouseDown={(e) => {
           if (progressTotalSec <= 0 || progressW <= 0) return;
           const target = e.target;
