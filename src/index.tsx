@@ -1333,27 +1333,56 @@ function App() {
   );
 }
 
-const renderer = await createCliRenderer();
+let rendererDestroyed = false;
+let resolveRendererDestroyed: () => void = () => {};
+const rendererDestroyedPromise = new Promise<void>((resolve) => {
+  resolveRendererDestroyed = resolve;
+});
+
+const renderer = await createCliRenderer({
+  // The app owns Ctrl-C/signals so we can wait for OpenTUI's *native* terminal
+  // teardown before exiting. OpenTUI's "destroy" event fires before that teardown.
+  exitOnCtrlC: false,
+  exitSignals: [],
+  onDestroy: () => {
+    rendererDestroyed = true;
+    resolveRendererDestroyed();
+  },
+});
 createRoot(renderer).render(<App />);
 
-// destroy() can defer the native cleanup (kitty keyboard pop, alt-screen exit,
-// mouse disable) to the render loop's finally block if called mid-render.
-// Wait for the 'destroy' event before exiting so those sequences actually fire.
+let shutdownStarted = false;
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
+
+const forceTerminalSane = () => {
+  // Best-effort fallback for interrupted native cleanup: show cursor, leave the
+  // alternate screen, disable common mouse modes, and reset keypad/bracketed paste.
+  process.stdout.write(
+    "\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?1l\x1b>",
+  );
+  if (process.stdin.setRawMode) process.stdin.setRawMode(false);
+};
+
 const shutdown = (code = 0, err?: unknown) => {
-  let exited = false;
-  const exit = () => {
-    if (exited) return;
-    exited = true;
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+
+  void (async () => {
+    try {
+      if (!rendererDestroyed) renderer.destroy();
+      await Promise.race([rendererDestroyedPromise, wait(1000)]);
+      if (!rendererDestroyed) forceTerminalSane();
+    } catch {
+      forceTerminalSane();
+    }
+
     if (err !== undefined) console.error(err);
     process.exit(code);
-  };
-  try {
-    renderer.once("destroy", exit);
-    renderer.destroy();
-  } catch {
-    // If shutdown cleanup itself fails, fall through to the forced exit timer.
-  }
-  setTimeout(exit, 250).unref();
+  })();
 };
 
 process.on("SIGINT", () => shutdown(130));
