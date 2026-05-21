@@ -1,4 +1,0 @@
-{
-  "signature": "src/theme.ts::ℹ️ Advisory — no action required this turn:\n⚠️ Newly unused exports in modified files — check if callers need updating (Knip):\n  src/theme.ts:60 — Theme\n",
-  "sessionId": "lens-mpebwcw0-6bfd226d"
-}
