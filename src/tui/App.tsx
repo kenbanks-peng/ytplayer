@@ -609,19 +609,17 @@ export function App({ onQuit }: AppProps) {
       return;
     }
     if (key.name === "n") {
-      if (focus === "results") {
-        if (results.length === 0) return;
-        const next = Math.min(results.length - 1, selectedIndex + 1);
-        if (next !== selectedIndex) {
-          const t = results[next];
-          if (t) {
-            setSelectedIndex(next);
-            previewFromResults(t);
-          }
+      const previewIndex = preview
+        ? results.findIndex((t) => t.id === preview.id)
+        : -1;
+      if (focus === "results" && previewIndex >= 0) {
+        const next = Math.min(results.length - 1, previewIndex + 1);
+        const t = results[next];
+        if (next !== previewIndex && t) {
+          setSelectedIndex(next);
+          previewFromResults(t);
         }
-      } else {
-        nextTrack();
-      }
+      } else if (queueIndex >= 0) nextTrack();
       return;
     }
     if (key.name === "right") {
@@ -635,19 +633,17 @@ export function App({ onQuit }: AppProps) {
       return;
     }
     if (key.name === "p") {
-      if (focus === "results") {
-        if (results.length === 0) return;
-        const prev = Math.max(0, selectedIndex - 1);
-        if (prev !== selectedIndex) {
-          const t = results[prev];
-          if (t) {
-            setSelectedIndex(prev);
-            previewFromResults(t);
-          }
+      const previewIndex = preview
+        ? results.findIndex((t) => t.id === preview.id)
+        : -1;
+      if (focus === "results" && previewIndex >= 0) {
+        const prev = Math.max(0, previewIndex - 1);
+        const t = results[prev];
+        if (prev !== previewIndex && t) {
+          setSelectedIndex(prev);
+          previewFromResults(t);
         }
-      } else {
-        prevTrack();
-      }
+      } else if (queueIndex >= 0) prevTrack();
       return;
     }
     if (key.name === "d" && focus === "playlist") {
