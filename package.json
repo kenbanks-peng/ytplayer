@@ -4,8 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.tsx",
-    "build": "bun build --compile src/index.tsx --outfile bin/ytplayer"
+    "dev": "bun run --watch src/index.tsx"
   },
   "devDependencies": {
     "@types/bun": "latest"
