@@ -11,7 +11,11 @@ export const CACHE_DIR = join(homedir(), ".cache", "ytplayer");
 export const STATE_FILE = join(CACHE_DIR, "state.json");
 export const SEARCH_FILE = join(CACHE_DIR, "search.json");
 export const ACTIVE_FILE = join(CACHE_DIR, "active.json");
-export const PLAYLIST_DIR = join(CACHE_DIR, "playlists");
+export const CONFIG_DIR = join(
+	process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
+	"ytplayer",
+);
+export const PLAYLIST_DIR = join(CONFIG_DIR, "playlists");
 export const MPV_LOG = join(CACHE_DIR, "mpv.log");
 
 export const RPC_TIMEOUT_MS = 2000;

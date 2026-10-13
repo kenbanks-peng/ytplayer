@@ -10,6 +10,7 @@ Terminal YouTube player. Search, queue, and play audio, video, or video wallpape
 - **Repeat the playlist** (not the current track): when the last item ends with repeat on, playback wraps to the start.
 - **Audio, video, or wallpaper mode** cycled at any time; switching mode restarts active playback. Wallpaper mode passes `--wallpaper-mode` to `mpv` (requires platform/window-manager support).
 - **Persistent caches** under `~/.cache/ytplayer/`: last search results, queue, index, repeat, and mode.
+- **Saved playlists** under `$XDG_CONFIG_HOME/ytplayer/playlists/` (defaults to `~/.config/ytplayer/playlists/` when `XDG_CONFIG_HOME` is unset or empty).
 
 ## Requirements
 
