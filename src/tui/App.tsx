@@ -42,7 +42,7 @@ import {
   sameTrackIdSet,
   savePlaylist,
 } from "../playlists";
-import type { PlayMode, Track } from "../protocol";
+import { isPlayMode, nextPlayMode, type PlayMode, type Track } from "../protocol";
 import { clip, displayWidth, fmtDur, slugify } from "../text";
 import { theme } from "../theme";
 import {
@@ -158,8 +158,7 @@ export function App({ onQuit }: AppProps) {
         setTrackDuration(
           typeof state.duration === "number" ? state.duration : 0,
         );
-        if (state.mode === "audio" || state.mode === "video")
-          setMode(state.mode);
+        if (isPlayMode(state.mode)) setMode(state.mode);
         if (q.length === 0) {
           saveActiveAssoc(null);
         } else {
@@ -216,7 +215,7 @@ export function App({ onQuit }: AppProps) {
       }
       setPlaying(Boolean(state.playing));
       setRepeatState(Boolean(state.repeat));
-      if (state.mode === "audio" || state.mode === "video") setMode(state.mode);
+      if (isPlayMode(state.mode)) setMode(state.mode);
     }, 1000);
 
     return () => {
@@ -584,7 +583,7 @@ export function App({ onQuit }: AppProps) {
       return;
     }
     if (key.name === "m") {
-      const next: PlayMode = mode === "audio" ? "video" : "audio";
+      const next = nextPlayMode(mode);
       setMode(next);
       setModeOnServer(next);
       return;

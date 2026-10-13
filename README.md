@@ -1,6 +1,6 @@
 # ytplayer
 
-Terminal YouTube player. Search, queue, and play audio or video via `mpv`.
+Terminal YouTube player. Search, queue, and play audio, video, or video wallpaper via `mpv`.
 
 ## Features
 
@@ -8,7 +8,7 @@ Terminal YouTube player. Search, queue, and play audio or video via `mpv`.
 - **Server-managed playback**: a background daemon owns `mpv` and the playlist, so playback survives TUI exits, crashes, and `SIGHUP`. Reattach by relaunching — the queue, current index, mode, and repeat flag are restored from disk.
 - **Playlist**: append from search results, jump to any track, remove items, skip forward/back. Pressing play on a single video is just a playlist of one.
 - **Repeat the playlist** (not the current track): when the last item ends with repeat on, playback wraps to the start.
-- **Audio or video mode** toggled at any time; mode applies to the next track played.
+- **Audio, video, or wallpaper mode** cycled at any time; switching mode restarts active playback. Wallpaper mode passes `--wallpaper-mode` to `mpv` (requires platform/window-manager support).
 - **Persistent caches** under `~/.cache/ytplayer/`: last search results, queue, index, repeat, and mode.
 
 ## Requirements
@@ -58,7 +58,7 @@ Three panes: search input on top, search results on the left, playlist on the ri
 - `←` / `→` — seek -10s / +10s
 - `s` — stop (clears current playback; queue is preserved)
 - `r` — toggle repeat (wraps the whole playlist)
-- `m` — toggle audio / video mode
+- `m` — cycle audio → video → wallpaper → audio
 - `f` — fetch more results (or run search if the input changed)
 - `c` (results) — clear search results and cache
 - `c` (playlist) — clear the playlist

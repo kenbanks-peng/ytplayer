@@ -19,7 +19,7 @@ export const HELP_RIGHT: [string, string][] = [
   ["p / n", "prev / next track"],
   ["← / →", "seek -10s / +10s"],
   ["s", "stop"],
-  ["m", "mode: audio / video"],
+  ["m", "mode: audio / video / wallpaper"],
   ["r", "repeat toggle"],
   ["f", "fetch more results"],
   ["q / Ctrl-C", "quit"],

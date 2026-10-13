@@ -10,7 +10,8 @@ import {
   SERVER_SOCK,
   STATE_FILE,
 } from "./paths";
-import { binaryVersion, type PlayMode, type Track } from "./protocol";
+import { mpvModeArgs } from "./playback";
+import { binaryVersion, isPlayMode, type PlayMode, type Track } from "./protocol";
 
 type PersistedState = {
   queue: Track[];
@@ -20,7 +21,10 @@ type PersistedState = {
 };
 
 const saveStateFile = (s: PersistedState) =>
-  saveOrUnlink(STATE_FILE, s.queue.length === 0 && !s.repeat ? null : s);
+  saveOrUnlink(
+    STATE_FILE,
+    s.queue.length === 0 && !s.repeat && s.mode === "audio" ? null : s,
+  );
 
 const loadStateFile = (): PersistedState | null =>
   loadJson<PersistedState>(STATE_FILE);
@@ -206,10 +210,7 @@ export async function runServer(): Promise<void> {
       "--prefetch-playlist=yes",
       "--gapless-audio=yes",
       `--input-ipc-server=${MPV_SOCK}`,
-      mode === "audio"
-        ? "--ytdl-format=bestaudio"
-        : "--ytdl-format=bestvideo*+bestaudio/best",
-      mode === "audio" ? "--no-video" : "--force-window=immediate",
+      ...mpvModeArgs(mode),
     ];
     let logFd: number;
     try {
@@ -303,7 +304,7 @@ export async function runServer(): Promise<void> {
   if (cached) {
     queue = Array.isArray(cached.queue) ? cached.queue : [];
     repeat = Boolean(cached.repeat);
-    mode = cached.mode === "video" ? "video" : "audio";
+    mode = isPlayMode(cached.mode) ? cached.mode : "audio";
   }
   if (existsSync(MPV_SOCK)) {
     // A previous mpv may still be alive bound to this socket. Best-effort:
@@ -651,7 +652,7 @@ export async function runServer(): Promise<void> {
         return { ok: true, repeat };
       case "mode": {
         const next = req.mode;
-        if (next !== "audio" && next !== "video") return { ok: true, mode };
+        if (!isPlayMode(next)) return { ok: true, mode };
         if (next === mode) return { ok: true, mode };
         const wasIndex = index;
         const wasPreview = preview;
